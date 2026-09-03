@@ -1,0 +1,14 @@
+.git
+.gitignore
+.next
+.desktop-vendor
+.env
+.env.*
+!.env.example
+.DS_Store
+node_modules
+dist
+release
+npm-debug.log*
+*.md
+!README.md

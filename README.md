@@ -1,9 +1,9 @@
 # Effiwaste AI Chef
 
 Aplicación que propone tres recetas de reaprovechamiento a partir de los
-alimentos disponibles mediante Ollama. Puede utilizar Ollama en el mismo equipo
-durante el desarrollo o conectarse de forma segura a un servidor al desplegarse
-en Vercel.
+alimentos disponibles mediante Ollama. Puede ejecutarse localmente durante el
+desarrollo, empaquetarse como aplicación de escritorio o desplegarse completa
+en un servidor mediante Docker Compose.
 
 ## Requisitos
 
@@ -67,13 +67,121 @@ Variables disponibles:
 | `OLLAMA_API_KEY` | Token compartido con el proxy del servidor. Es obligatorio para una URL remota. |
 | `OLLAMA_MODEL` | Modelo instalado que debe usar la aplicación. Por defecto, `llama3.2:3b`. |
 | `OLLAMA_ALLOW_INSECURE_HTTP` | Permite HTTP remoto sólo si vale `true`; no debe utilizarse en Internet. |
+| `OLLAMA_TRUSTED_HOSTS` | Hosts internos separados por comas que no necesitan HTTPS ni token. El Compose utiliza únicamente `ollama`. |
 
 Las variables no llevan el prefijo `NEXT_PUBLIC_`: sólo se leen en las rutas de
 servidor y nunca se incluyen en el JavaScript que recibe el navegador.
 
-## Alojar Ollama en un servidor
+## Despliegue completo con Docker Compose
 
-La carpeta `deploy/ollama` incluye un despliegue con Docker Compose. Ollama sólo
+Ésta es la opción recomendada cuando la web y Ollama se ejecutan en el mismo
+servidor. El servidor sólo necesita Git, Docker Engine y Docker Compose. Caddy
+publica la aplicación mediante HTTPS; Next.js y Ollama sólo son accesibles desde
+sus redes privadas de Docker.
+
+El modelo se descarga automáticamente la primera vez y se conserva en el volumen
+`ollama-data`. Las reconstrucciones de la aplicación no vuelven a descargarlo.
+
+### Primera instalación
+
+1. Haz que el dominio elegido apunte a la IP pública del servidor y abre los
+   puertos TCP `80` y `443`, UDP `443` y el puerto de SSH. No abras `3000` ni
+   `11434`.
+2. Clona directamente la rama de producción:
+
+   ```bash
+   git clone --branch main --single-branch URL_DEL_REPOSITORIO AIChef
+   cd AIChef
+   ```
+
+3. Crea la configuración del servidor:
+
+   ```bash
+   cp .env.example .env
+   nano .env
+   ```
+
+   Sustituye `chef.example.com` por el dominio real en `APP_ADDRESS`. Para una
+   prueba sin dominio puedes utilizar `APP_ADDRESS=http://IP_DEL_SERVIDOR`, pero
+   esa modalidad no tendrá HTTPS.
+
+4. Construye y arranca todos los servicios:
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+   La primera ejecución puede tardar varios minutos porque descarga la imagen y
+   el modelo `llama3.2:3b`. Consulta el progreso con:
+
+   ```bash
+   docker compose logs -f ollama-init
+   ```
+
+5. Comprueba el estado:
+
+   ```bash
+   docker compose ps
+   docker compose logs --tail=100 app caddy ollama
+   ```
+
+### Actualizaciones desde `main`
+
+El script de despliegue exige estar en la rama `main`, hace un `pull` que no
+reescribe el historial, actualiza las imágenes auxiliares y reconstruye la web:
+
+```bash
+./scripts/deploy.sh
+```
+
+Su equivalente manual es:
+
+```bash
+git pull --ff-only origin main
+docker compose pull ollama ollama-init caddy
+docker compose up -d --build --remove-orphans
+```
+
+Un simple `git pull` no reinicia el código que ya está dentro del contenedor; por
+eso siempre debe ir seguido de `docker compose up -d --build`.
+
+### Servidor con GPU NVIDIA
+
+Instala en el servidor el controlador NVIDIA y NVIDIA Container Toolkit. Después
+arranca el despliegue incluyendo el archivo adicional:
+
+```bash
+docker compose -f compose.yaml -f compose.gpu.yaml up -d --build
+```
+
+Para aplicar actualizaciones con GPU utiliza los mismos dos parámetros `-f` al
+ejecutar Compose. También puedes descomentar `COMPOSE_FILE` en `.env`; de esa
+forma `./scripts/deploy.sh` aplicará automáticamente la configuración de GPU. En
+un servidor sin GPU se usa solamente `compose.yaml`.
+
+### Operaciones habituales
+
+```bash
+# Ver registros en directo
+docker compose logs -f
+
+# Reiniciar los servicios sin borrar datos
+docker compose restart
+
+# Detener los servicios conservando el modelo y los certificados
+docker compose down
+
+# Ver los modelos persistidos
+docker compose exec ollama ollama list
+```
+
+No ejecutes `docker compose down -v` salvo que quieras eliminar también el modelo
+descargado y los certificados almacenados por Caddy.
+
+## Alojar sólo Ollama en un servidor
+
+La carpeta `deploy/ollama` conserva una alternativa para alojar únicamente
+Ollama cuando la web se despliega por separado, por ejemplo en Vercel. Ollama sólo
 está disponible dentro de la red de Docker y Caddy publica la API con HTTPS y un
 token Bearer. No abras el puerto `11434` en el cortafuegos.
 

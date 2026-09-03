@@ -1,0 +1,14 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.next/
+.open-next/
+.wrangler/
+.desktop-vendor/
+node_modules/
+dist/
+release/
+coverage/
+npm-debug.log*
+*.tsbuildinfo

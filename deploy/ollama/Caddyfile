@@ -1,0 +1,8 @@
+{$OLLAMA_DOMAIN} {
+  @missing_token not header Authorization "Bearer {$OLLAMA_API_KEY}"
+  respond @missing_token "Unauthorized" 401
+
+  reverse_proxy ollama:11434 {
+    flush_interval -1
+  }
+}

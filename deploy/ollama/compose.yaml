@@ -1,0 +1,34 @@
+name: effiwaste-ollama
+
+services:
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    restart: unless-stopped
+    environment:
+      OLLAMA_NO_CLOUD: "1"
+      OLLAMA_KEEP_ALIVE: "30m"
+    volumes:
+      - ollama-data:/root/.ollama
+    expose:
+      - "11434"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_DOMAIN: ${OLLAMA_DOMAIN:?Define OLLAMA_DOMAIN in .env}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:?Define OLLAMA_API_KEY in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  ollama-data:
+  caddy-data:
+  caddy-config:

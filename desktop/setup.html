@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preparando Effiwaste AI Chef</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #123047;
+        background: #f4f8fb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 38px;
+        text-align: center;
+      }
+      main { width: min(100%, 430px); }
+      .mark {
+        width: 70px;
+        height: 70px;
+        margin: 0 auto 22px;
+        display: grid;
+        place-items: center;
+        border-radius: 21px;
+        color: white;
+        font-size: 35px;
+        font-weight: 800;
+        background: linear-gradient(145deg, #0b5394, #00b6bd);
+        box-shadow: 0 16px 36px rgba(11, 83, 148, 0.2);
+      }
+      h1 { margin: 0; font-size: 25px; letter-spacing: -0.02em; }
+      .tagline { margin: 7px 0 28px; color: #547083; font-size: 14px; }
+      .track {
+        height: 10px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #dce8ef;
+      }
+      #progress {
+        width: 4%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #0b5394, #00b6bd, #6bac00);
+        transition: width 280ms ease;
+      }
+      #status { min-height: 23px; margin: 17px 0 0; font-weight: 650; }
+      .note { margin: 9px 0 0; color: #688092; font-size: 12px; line-height: 1.45; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark" aria-hidden="true">E</div>
+      <h1>Effiwaste AI Chef</h1>
+      <p class="tagline">Aprovecha más. Desperdicia menos.</p>
+      <div class="track" role="progressbar" aria-label="Preparación de la aplicación">
+        <div id="progress"></div>
+      </div>
+      <p id="status" aria-live="polite">Preparando la aplicación…</p>
+      <p class="note">
+        En el primer inicio se descargará el modelo local. Puede tardar varios minutos y requiere
+        conexión a Internet; después, las recetas se generan en este equipo.
+      </p>
+    </main>
+  </body>
+</html>

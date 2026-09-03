@@ -15,7 +15,7 @@
     "start": "next start",
     "dev:sites": "vinext dev",
     "build:sites": "vinext build",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/ollama-client.test.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/ollama-client.test.mjs tests/docker-deployment.test.mjs",
     "test:desktop": "node --test tests/desktop-packaging.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
