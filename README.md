@@ -1,344 +1,572 @@
 # Circular Chef
 
-Aplicación que propone tres recetas de reaprovechamiento a partir de los
-alimentos disponibles mediante Ollama. Puede ejecutarse localmente durante el
-desarrollo, empaquetarse como aplicación de escritorio o desplegarse completa
-en un servidor mediante Docker Compose.
+![Circular Chef — Aprovecha más. Desperdicia menos.](./public/og.png)
 
-## Requisitos
+**Circular Chef** es un asistente de cocina circular que transforma alimentos sobrantes en tres propuestas de reaprovechamiento detalladas. La aplicación combina una interfaz web en Next.js con un modelo de lenguaje servido por Ollama y está pensada para cocinas profesionales, restauración y entornos donde interesa reducir desperdicio sin perder de vista la trazabilidad y la seguridad alimentaria.
 
-- Node.js 22 o posterior.
+El usuario puede describir los alimentos en lenguaje natural o importar un inventario CSV/Excel, indicar comensales, tiempo disponible, estilo culinario y restricciones, y recibir recetas estructuradas con cantidades, tiempos, temperaturas, elaboración y advertencias de seguridad.
+
+> [!IMPORTANT]
+> Las recetas son propuestas generadas por IA. Antes de elaborarlas, el responsable de cocina debe validar ingredientes, alérgenos, conservación, trazabilidad y procedimientos conforme al sistema APPCC del establecimiento.
+
+## Contenido
+
+- [Funcionalidades](#funcionalidades)
+- [Cómo funciona](#cómo-funciona)
+- [Tecnologías](#tecnologías)
+- [Inicio rápido](#inicio-rápido)
+- [Uso de la aplicación](#uso-de-la-aplicación)
+- [Configuración](#configuración)
+- [Despliegue con Docker Compose](#despliegue-con-docker-compose)
+- [Despliegue separado: web y Ollama](#despliegue-separado-web-y-ollama)
+- [Aplicación de escritorio](#aplicación-de-escritorio)
+- [API](#api)
+- [Desarrollo y verificación](#desarrollo-y-verificación)
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Seguridad y privacidad](#seguridad-y-privacidad)
+- [Resolución de problemas](#resolución-de-problemas)
+
+## Funcionalidades
+
+- Generación de **exactamente tres recetas** diferentes a partir de los sobrantes disponibles.
+- Entrada mediante texto libre o archivos `.csv` y `.xlsx`.
+- Detección automática de separadores CSV: coma, punto y coma o tabulador.
+- Previsualización editable del inventario importado antes de generar recetas.
+- Ajuste por número de comensales, tiempo máximo, tipo de cocina y restricciones alimentarias.
+- Ingredientes cuantificados, preparación previa, tamaño de ración y pasos numerados.
+- Tiempos de preparación y cocción, temperaturas o potencias y señales observables del punto correcto.
+- Identificación prudente de alimentos que deberían descartarse cuando su uso pueda ser dudoso.
+- Indicador de disponibilidad de Ollama y del modelo configurado.
+- Ejecución local, despliegue completo con contenedores, despliegue web desacoplado y distribución como aplicación de escritorio.
+
+## Cómo funciona
+
+```mermaid
+flowchart LR
+    U[Usuario] --> UI[Interfaz Next.js]
+    F[CSV o Excel] -->|Lectura local en el navegador| UI
+    UI -->|GET /api/models| M[API de servidor]
+    UI -->|POST /api/recipes| M
+    M -->|Petición autenticada si es remota| O[Ollama]
+    O -->|JSON estructurado| M
+    M -->|3 recetas| UI
+```
+
+1. El navegador procesa el texto o la primera hoja del archivo importado.
+2. La interfaz valida que cada fila tenga ingrediente, cantidad positiva y unidad.
+3. `GET /api/models` comprueba que Ollama responde y que el modelo requerido está instalado.
+4. `POST /api/recipes` valida y limita la entrada, construye el prompt culinario y solicita una respuesta JSON a Ollama.
+5. El servidor devuelve tres recetas estructuradas; la interfaz presenta ingredientes, pasos, tiempos y avisos.
+
+La comunicación con Ollama siempre se realiza desde el servidor de la aplicación. Su URL y su token no se incluyen en el JavaScript enviado al navegador.
+
+### Modalidades disponibles
+
+| Modalidad | Uso recomendado | Ollama | HTTPS |
+| --- | --- | --- | --- |
+| Desarrollo local | Programación y pruebas | Instalado en el equipo | No necesario en `localhost` |
+| Docker Compose completo | Servidor propio y producción autocontenida | Contenedor privado | Caddy lo gestiona automáticamente |
+| Web + Ollama remoto | Vercel u otro hosting para Next.js | Servidor separado | Obligatorio entre servicios |
+| Escritorio | Usuarios sin entorno de desarrollo | Incluido en el instalador | No; todo escucha en loopback |
+
+## Tecnologías
+
+- **Next.js 16**, React 19 y TypeScript.
+- **Ollama** con `llama3.2:3b` como modelo predeterminado.
+- **Electron** y Electron Builder para las aplicaciones de escritorio.
+- **Docker Compose** para orquestar Next.js, Ollama y Caddy.
+- **Caddy** como proxy inverso y terminación TLS.
+- `read-excel-file` para interpretar `.xlsx` en el navegador.
+- ESLint y el runner de pruebas nativo de Node.js para calidad y verificación.
+
+La carpeta `db/` conserva un punto de extensión para Drizzle y Cloudflare D1, pero la versión actual no utiliza base de datos ni guarda históricos de recetas.
+
+## Inicio rápido
+
+### Requisitos
+
+- Node.js **22.13 o posterior**.
+- npm, incluido con Node.js.
 - Ollama instalado y en ejecución.
-- El modelo `llama3.2:3b`, que es el utilizado siempre por AI Chef.
+- El modelo configurado; por defecto, `llama3.2:3b`.
 
-## Puesta en marcha
+### Instalación local
 
-1. Descarga el modelo la primera vez:
+```bash
+git clone URL_DEL_REPOSITORIO
+cd AIChef
+npm install
+ollama pull llama3.2:3b
+```
 
-   ```bash
-   ollama pull llama3.2:3b
-   ```
+Inicia Ollama si todavía no está activo:
 
-2. Comprueba que Ollama está iniciado:
+```bash
+ollama serve
+```
 
-   ```bash
-   ollama serve
-   ```
+En otra terminal, inicia la aplicación:
 
-3. La primera vez, instala las dependencias desde esta carpeta:
-
-   ```bash
-   npm install
-   ```
-
-4. Inicia la interfaz:
-
-   ```bash
-   npm run dev
-   ```
-
-5. Abre `http://localhost:3000`.
-
-La luz de estado de la cabecera indicará si Ollama está conectado. AI Chef
-utiliza siempre `llama3.2:3b`; no es necesario configurar un selector.
-
-## Configuración opcional
-
-Ollama se busca en `http://127.0.0.1:11434`. Para utilizar otra dirección:
-
-En Windows PowerShell:
-
-```powershell
-$env:OLLAMA_BASE_URL="http://127.0.0.1:11434"
+```bash
 npm run dev
 ```
 
-En macOS o Linux:
+Abre [http://localhost:3000](http://localhost:3000). El indicador de la cabecera debería mostrar **Ollama conectado**.
+
+### Ejecución local en modo producción
 
 ```bash
-OLLAMA_BASE_URL=http://127.0.0.1:11434 npm run dev
+npm run build
+npm start
 ```
 
-Variables disponibles:
+## Uso de la aplicación
 
-| Variable | Uso |
-| --- | --- |
-| `OLLAMA_BASE_URL` | URL de Ollama. En producción debe ser una URL HTTPS. |
-| `OLLAMA_API_KEY` | Token compartido con el proxy del servidor. Es obligatorio para una URL remota. |
-| `OLLAMA_MODEL` | Modelo instalado que debe usar la aplicación. Por defecto, `llama3.2:3b`. |
-| `OLLAMA_ALLOW_INSECURE_HTTP` | Permite HTTP remoto sólo si vale `true`; no debe utilizarse en Internet. |
-| `OLLAMA_TRUSTED_HOSTS` | Hosts internos separados por comas que no necesitan HTTPS ni token. El Compose utiliza únicamente `ollama`. |
+### Entrada en lenguaje natural
 
-Las variables no llevan el prefijo `NEXT_PUBLIC_`: sólo se leen en las rutas de
-servidor y nunca se incluyen en el JavaScript que recibe el navegador.
+Selecciona **Escribir sobrantes** e indica con la mayor precisión posible los productos y cantidades disponibles. Por ejemplo:
 
-## Despliegue completo con Docker Compose
+```text
+Han sobrado 2 kg de tomates maduros, 3 barras de pan del desayuno
+y 500 g de queso. Necesito aprovecharlo para el servicio de mañana.
+```
 
-Ésta es la opción recomendada cuando la web y Ollama se ejecutan en el mismo
-servidor. El servidor sólo necesita Git, Docker Engine y Docker Compose. Caddy
-publica la aplicación mediante HTTPS; Next.js y Ollama sólo son accesibles desde
-sus redes privadas de Docker.
+Después configura:
 
-El modelo se descarga automáticamente la primera vez y se conserva en el volumen
-`ollama-data`. Las reconstrucciones de la aplicación no vuelven a descargarlo.
+- **Comensales:** entre 1 y 100.
+- **Tiempo máximo:** duración total permitida para cada receta.
+- **Tipo de cocina:** estilo o contexto culinario deseado.
+- **Alergias o restricciones:** condiciones que el modelo debe respetar.
+
+### Importación CSV o Excel
+
+Selecciona **Subir CSV / Excel** y carga un `.csv` o `.xlsx`. En Excel se procesa la primera hoja. El formato recomendado es:
+
+| ingrediente | cantidad | unidad |
+| --- | ---: | --- |
+| Tomate maduro | 2,5 | kg |
+| Pan del desayuno | 3 | barras |
+| Queso | 500 | g |
+
+También se reconocen encabezados equivalentes:
+
+- Ingrediente: `producto`, `alimento`, `nombre`, `ingredient`, `product` o `name`.
+- Cantidad: `peso`, `quantity`, `amount` o `weight`.
+- Unidad: `unidad de medida`, `unit` o `measure`.
+
+Si no hay encabezados reconocibles, se interpretan las tres primeras columnas como ingrediente, cantidad y unidad. La importación admite hasta 500 filas. Antes de generar, se puede corregir, añadir o eliminar cualquier ingrediente desde la previsualización.
+
+El archivo se interpreta localmente en el navegador: no se sube el fichero original. Al generar, sí se envía al backend el listado de ingredientes extraído y revisado.
+
+## Configuración
+
+Todas las variables que conectan con Ollama son privadas del servidor. No deben llevar el prefijo `NEXT_PUBLIC_`.
+
+### Variables de la aplicación
+
+| Variable | Valor predeterminado | Descripción |
+| --- | --- | --- |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | URL base de Ollama. Una URL remota debe usar HTTPS. |
+| `OLLAMA_MODEL` | `llama3.2:3b` | Modelo que se comprobará y utilizará para generar recetas. |
+| `OLLAMA_API_KEY` | — | Token Bearer requerido cuando Ollama está en un host remoto. |
+| `OLLAMA_TRUSTED_HOSTS` | — | Hosts internos, separados por comas, autorizados a usar HTTP sin token. El Compose completo utiliza `ollama`. |
+| `OLLAMA_ALLOW_INSECURE_HTTP` | `false` | Permite HTTP remoto únicamente cuando vale `true`. Úsalo sólo en redes controladas. |
+
+Ejemplo para utilizar un Ollama remoto:
+
+```bash
+OLLAMA_BASE_URL=https://ollama.example.com \
+OLLAMA_API_KEY=un-token-largo-y-aleatorio \
+OLLAMA_MODEL=llama3.2:3b \
+npm run dev
+```
+
+En Windows PowerShell, la misma configuración se establece así:
+
+```powershell
+$env:OLLAMA_BASE_URL="https://ollama.example.com"
+$env:OLLAMA_API_KEY="un-token-largo-y-aleatorio"
+$env:OLLAMA_MODEL="llama3.2:3b"
+npm run dev
+```
+
+La aplicación de escritorio utiliza siempre `llama3.2:3b`; `OLLAMA_MODEL` permite cambiar el modelo en las modalidades web y servidor.
+
+### Variables del despliegue completo
+
+El archivo `.env.example` contiene la configuración de Docker Compose:
+
+| Variable | Obligatoria | Descripción |
+| --- | --- | --- |
+| `APP_ADDRESS` | Sí | Dominio público de la aplicación o `http://IP` para una prueba sin TLS. |
+| `OLLAMA_MODEL` | No | Modelo descargado por `ollama-init`. |
+| `OLLAMA_KEEP_ALIVE` | No | Tiempo durante el que Ollama mantiene el modelo cargado. |
+| `APP_IMAGE` | No | Nombre o etiqueta de la imagen local de la aplicación. |
+| `OLLAMA_IMAGE` | No | Imagen y versión de Ollama. |
+| `CADDY_IMAGE` | No | Imagen y versión de Caddy. |
+| `COMPOSE_FILE` | No | Permite activar el override de GPU de forma permanente. |
+
+No publiques el archivo `.env` ni tokens reales en el repositorio.
+
+## Despliegue con Docker Compose
+
+Es la opción recomendada para un servidor propio. El conjunto levanta cuatro servicios:
+
+- `caddy`: único servicio publicado; atiende en `80`, `443/tcp` y `443/udp`.
+- `app`: aplicación Next.js ejecutada como usuario sin privilegios.
+- `ollama`: motor de inferencia accesible sólo desde la red privada `ai-backend`.
+- `ollama-init`: tarea de inicialización que descarga el modelo antes de iniciar la web.
+
+Los puertos `3000` y `11434` no se publican en el host.
+
+### Requisitos del servidor
+
+- Linux con Git, Docker Engine y Docker Compose v2.
+- DNS del dominio apuntando a la IP pública.
+- Puertos TCP `80` y `443`, UDP `443` y el puerto de SSH permitidos en el cortafuegos.
+- Espacio suficiente para imágenes, modelo y caché. El primer arranque descarga varios GB.
+- Para GPU: controlador NVIDIA y NVIDIA Container Toolkit.
 
 ### Primera instalación
 
-1. Haz que el dominio elegido apunte a la IP pública del servidor y abre los
-   puertos TCP `80` y `443`, UDP `443` y el puerto de SSH. No abras `3000` ni
-   `11434`.
-2. Clona directamente la rama de producción:
-
-   ```bash
-   git clone --branch main --single-branch URL_DEL_REPOSITORIO AIChef
-   cd AIChef
-   ```
-
-3. Crea la configuración del servidor:
-
-   ```bash
-   cp .env.example .env
-   nano .env
-   ```
-
-   Sustituye `chef.example.com` por el dominio real en `APP_ADDRESS`. Para una
-   prueba sin dominio puedes utilizar `APP_ADDRESS=http://IP_DEL_SERVIDOR`, pero
-   esa modalidad no tendrá HTTPS.
-
-4. Construye y arranca todos los servicios:
-
-   ```bash
-   docker compose up -d --build
-   ```
-
-   La primera ejecución puede tardar varios minutos porque descarga la imagen y
-   el modelo `llama3.2:3b`. Consulta el progreso con:
-
-   ```bash
-   docker compose logs -f ollama-init
-   ```
-
-5. Comprueba el estado:
-
-   ```bash
-   docker compose ps
-   docker compose logs --tail=100 app caddy ollama
-   ```
-
-### Actualizaciones desde `main`
-
-El script de despliegue exige estar en la rama `main`, hace un `pull` que no
-reescribe el historial, actualiza las imágenes auxiliares y reconstruye la web:
-
 ```bash
-./scripts/deploy.sh
+git clone --branch main --single-branch URL_DEL_REPOSITORIO AIChef
+cd AIChef
+cp .env.example .env
 ```
 
-Su equivalente manual es:
+Edita `.env` y sustituye el dominio de ejemplo:
 
-```bash
-git pull --ff-only origin main
-docker compose pull ollama ollama-init caddy
-docker compose up -d --build --remove-orphans
+```dotenv
+APP_ADDRESS=chef.example.com
+OLLAMA_MODEL=llama3.2:3b
+OLLAMA_KEEP_ALIVE=30m
 ```
 
-Un simple `git pull` no reinicia el código que ya está dentro del contenedor; por
-eso siempre debe ir seguido de `docker compose up -d --build`.
+Arranca el sistema:
 
-### Servidor con GPU NVIDIA
+```bash
+docker compose up -d --build
+```
 
-Instala en el servidor el controlador NVIDIA y NVIDIA Container Toolkit. Después
-arranca el despliegue incluyendo el archivo adicional:
+La primera ejecución tarda más porque `ollama-init` descarga el modelo en el volumen persistente `ollama-data`. Sigue el progreso y comprueba el estado con:
+
+```bash
+docker compose logs -f ollama-init
+docker compose ps
+docker compose logs --tail=100 app caddy ollama
+```
+
+Que `ollama-init` aparezca como `Exited (0)` después de terminar es normal. Caddy solicitará y renovará el certificado automáticamente cuando el DNS y los puertos sean accesibles.
+
+Para una prueba temporal sin dominio se puede usar `APP_ADDRESS=http://IP_DEL_SERVIDOR`. Esa configuración no tiene HTTPS y no es adecuada para producción.
+
+### Aceleración con GPU NVIDIA
 
 ```bash
 docker compose -f compose.yaml -f compose.gpu.yaml up -d --build
 ```
 
-Para aplicar actualizaciones con GPU utiliza los mismos dos parámetros `-f` al
-ejecutar Compose. También puedes descomentar `COMPOSE_FILE` en `.env`; de esa
-forma `./scripts/deploy.sh` aplicará automáticamente la configuración de GPU. En
-un servidor sin GPU se usa solamente `compose.yaml`.
+También puedes descomentar esta línea de `.env` para que los comandos habituales y el script de actualización apliquen siempre el override:
 
-### Operaciones habituales
+```dotenv
+COMPOSE_FILE=compose.yaml:compose.gpu.yaml
+```
+
+### Actualizaciones
+
+Desde la rama `main`, ejecuta:
 
 ```bash
-# Ver registros en directo
+./scripts/deploy.sh
+```
+
+El script comprueba la rama y la existencia de `.env`, ejecuta un `git pull --ff-only`, actualiza las imágenes auxiliares, reconstruye la aplicación y elimina contenedores huérfanos. El equivalente manual es:
+
+```bash
+git pull --ff-only origin main
+docker compose pull ollama ollama-init caddy
+docker compose up -d --build --remove-orphans
+docker compose ps
+```
+
+Un `git pull` aislado no actualiza el código que ya está dentro del contenedor.
+
+### Operación habitual
+
+```bash
+# Registros en directo
 docker compose logs -f
 
-# Reiniciar los servicios sin borrar datos
+# Reiniciar sin eliminar datos
 docker compose restart
 
-# Detener los servicios conservando el modelo y los certificados
+# Detener conservando modelo y certificados
 docker compose down
 
-# Ver los modelos persistidos
+# Consultar los modelos instalados
 docker compose exec ollama ollama list
 ```
 
-No ejecutes `docker compose down -v` salvo que quieras eliminar también el modelo
-descargado y los certificados almacenados por Caddy.
+> [!CAUTION]
+> `docker compose down -v` elimina los volúmenes, incluido el modelo descargado y los datos de certificados de Caddy.
 
-## Alojar sólo Ollama en un servidor
+## Despliegue separado: web y Ollama
 
-La carpeta `deploy/ollama` conserva una alternativa para alojar únicamente
-Ollama cuando la web se despliega por separado, por ejemplo en Vercel. Ollama sólo
-está disponible dentro de la red de Docker y Caddy publica la API con HTTPS y un
-token Bearer. No abras el puerto `11434` en el cortafuegos.
+Esta arquitectura permite desplegar Next.js en Vercel u otro proveedor y mantener Ollama en un servidor propio. La conexión entre ambos debe usar HTTPS y un token Bearer.
 
-Necesitas un servidor Linux con Docker y Docker Compose, y un dominio o subdominio
-que apunte a la IP pública del servidor. Por ejemplo, `ollama.midominio.com`.
+### 1. Publicar sólo Ollama
 
-1. Copia la carpeta `deploy/ollama` al servidor y entra en ella.
-2. Crea la configuración local:
-
-   ```bash
-   cp env.example .env
-   openssl rand -hex 32
-   ```
-
-3. Edita `.env`: indica el dominio y pega como `OLLAMA_API_KEY` el token generado.
-4. Permite únicamente SSH, HTTP (`80`) y HTTPS (`443`) en el cortafuegos. Mantén
-   `11434` cerrado.
-5. Inicia el servicio para CPU:
-
-   ```bash
-   docker compose up -d
-   ```
-
-   Si el servidor tiene una GPU NVIDIA y ya dispone de NVIDIA Container Toolkit:
-
-   ```bash
-   docker compose -f compose.yaml -f compose.gpu.yaml up -d
-   ```
-
-6. Descarga el modelo dentro del volumen persistente:
-
-   ```bash
-   docker compose exec ollama ollama pull llama3.2:3b
-   ```
-
-7. Comprueba la API desde otro equipo:
-
-   ```bash
-   curl -fsS \
-     -H "Authorization: Bearer TU_TOKEN" \
-     https://ollama.midominio.com/api/tags
-   ```
-
-Caddy solicitará y renovará automáticamente el certificado TLS cuando el DNS
-apunte al servidor y los puertos 80 y 443 sean accesibles. Para revisar el
-servicio utiliza `docker compose logs -f`.
-
-## Desplegar la web en Vercel
-
-El proyecto compila como una aplicación Next.js y sus dos rutas `/api/models` y
-`/api/recipes` se ejecutan como funciones de servidor. La generación admite hasta
-300 segundos, aunque el límite efectivo depende del plan configurado en Vercel.
-
-1. Sube este proyecto a un repositorio Git y, en Vercel, selecciona **Add New →
-   Project** e importa el repositorio. Como alternativa, ejecuta `npx vercel` desde
-   la raíz del proyecto.
-2. En **Project Settings → Environment Variables**, añade estas variables tanto
-   para Production como para Preview si quieres que ambos entornos funcionen:
-
-   ```text
-   OLLAMA_BASE_URL=https://ollama.midominio.com
-   OLLAMA_API_KEY=el-mismo-token-configurado-en-el-servidor
-   OLLAMA_MODEL=llama3.2:3b
-   ```
-
-3. No definas `OLLAMA_ALLOW_INSECURE_HTTP` en Vercel.
-4. Despliega o vuelve a desplegar el proyecto después de guardar las variables.
-5. Abre la web y pulsa el indicador de conexión. Después genera una receta de
-   prueba mientras observas `docker compose logs -f` en el servidor.
-
-El navegador siempre llama a la misma web mediante `/api/...`; es Vercel quien
-se conecta a Ollama. Por eso no hay que habilitar CORS ni revelar la URL o el token
-al cliente. El control de origen incluido reduce llamadas desde otras webs, pero
-si la aplicación será pública conviene añadir también límites de uso o autenticación
-en Vercel para evitar que terceros consuman la capacidad del servidor.
-
-## Qué hace
-
-- Acepta los sobrantes escritos en lenguaje natural o importados desde un
-  archivo CSV o Excel (`.xlsx`).
-- Al importar un archivo, muestra una previsualización editable de cada
-  ingrediente, cantidad y unidad antes de permitir generar las recetas.
-- Tiene en cuenta comensales, tiempo, estilo culinario y restricciones.
-- Pide exactamente tres recetas en español, con ingredientes cuantificados y
-  pasos de elaboración numerados.
-- Calcula preparación, cocción, duración total y tamaño de la ración.
-- Cada paso incluye duración y temperatura o potencia cuando corresponde.
-- Advierte sobre ingredientes que el modelo considera dudosos y recuerda que
-  toda propuesta debe validarse según el sistema APPCC del establecimiento.
-- Envía los alimentos únicamente al servidor de Ollama configurado; el navegador
-  no se conecta directamente a Ollama.
-
-## Formato de los archivos
-
-La primera hoja de un archivo Excel, o el CSV completo, debe contener estas
-columnas recomendadas:
-
-| ingrediente | cantidad | unidad |
-| --- | ---: | --- |
-| Tomate maduro | 2.5 | kg |
-| Pan del desayuno | 3 | barras |
-| Queso | 500 | g |
-
-También se reconocen encabezados equivalentes como `producto`, `alimento`,
-`peso`, `nombre`, `ingredient`, `amount` o `unit`. Los CSV pueden utilizar
-coma, punto y coma o tabulador como separador. Si no hay encabezados, la
-aplicación interpreta las tres primeras columnas en el orden ingrediente,
-cantidad y unidad.
-
-Después de seleccionar el archivo, revisa y corrige la tabla de
-previsualización. No se generarán recetas mientras exista alguna fila sin
-nombre, sin unidad o con una cantidad que no sea mayor que cero.
-
-## Verificación
+La carpeta `deploy/ollama/` contiene un Compose independiente con Caddy, autenticación por token y persistencia.
 
 ```bash
-npm run build
-npm test
+cd deploy/ollama
+cp env.example .env
+openssl rand -hex 32
 ```
 
-## Aplicación de escritorio e instalador
+Configura el dominio y copia el token generado:
 
-La versión de escritorio incluye Node.js, la aplicación web compilada y el motor de Ollama.
-La persona que la recibe no necesita instalar dependencias ni utilizar una terminal. En el primer
-inicio, AI Chef arranca Ollama y descarga automáticamente el modelo `llama3.2:3b`; para ello se
-necesitan conexión a Internet y varios GB de espacio libre. Los siguientes inicios funcionan con
-el modelo guardado en el equipo.
+```dotenv
+OLLAMA_DOMAIN=ollama.example.com
+OLLAMA_API_KEY=TOKEN_GENERADO
+OLLAMA_IMAGE=ollama/ollama:latest
+```
 
-Para generar el instalador en el sistema operativo actual:
+Arranca para CPU:
 
 ```bash
-npm install
+docker compose up -d
+```
+
+O con GPU NVIDIA:
+
+```bash
+docker compose -f compose.yaml -f compose.gpu.yaml up -d
+```
+
+Descarga el modelo en el volumen persistente y verifica el acceso:
+
+```bash
+docker compose exec ollama ollama pull llama3.2:3b
+
+curl -fsS \
+  -H "Authorization: Bearer TOKEN_GENERADO" \
+  https://ollama.example.com/api/tags
+```
+
+Mantén cerrado el puerto `11434`; Caddy debe ser el único punto de entrada.
+
+### 2. Publicar la web
+
+En Vercel, importa el repositorio y define estas variables para los entornos que deban funcionar:
+
+```dotenv
+OLLAMA_BASE_URL=https://ollama.example.com
+OLLAMA_API_KEY=TOKEN_GENERADO
+OLLAMA_MODEL=llama3.2:3b
+```
+
+Después realiza un nuevo despliegue. Las rutas `/api/models` y `/api/recipes` se ejecutan en el servidor y la generación declara una duración máxima de 300 segundos; el límite efectivo dependerá del proveedor y del plan contratado.
+
+No habilites `OLLAMA_ALLOW_INSECURE_HTTP` en un entorno público. Tampoco es necesario configurar CORS en Ollama: el navegador llama a la API de Next.js en su propio origen.
+
+## Aplicación de escritorio
+
+La distribución de escritorio incluye Electron, Node.js, la aplicación compilada y los binarios de Ollama. El usuario final no necesita instalar Node.js ni ejecutar comandos.
+
+En el primer inicio, la aplicación:
+
+1. Comprueba si hay una instancia local de Ollama disponible.
+2. Si no la hay, inicia el binario incluido escuchando sólo en `127.0.0.1:11434` y deshabilita Ollama Cloud.
+3. Descarga `llama3.2:3b` si todavía no está instalado.
+4. Inicia el servidor web en un puerto local libre y abre una ventana aislada de Electron.
+
+La primera ejecución requiere conexión a Internet y varios GB de espacio libre. Después, el modelo permanece guardado en el equipo. Los fallos de arranque se registran en `circular-chef.log` dentro de la carpeta de logs de Electron.
+
+### Desarrollo de escritorio
+
+```bash
+npm run desktop:dev
+```
+
+### Generar artefactos
+
+```bash
+# Instaladores para el sistema actual
 npm run desktop:dist
-```
 
-Para generar desde macOS el instalador de Windows x64:
+# Directorio desempaquetado para pruebas
+npm run desktop:package
 
-```bash
+# Instalador NSIS de Windows x64 desde macOS
 npm run desktop:dist:win
 ```
 
-Los archivos para compartir se crean en `release/`:
+Los artefactos se escriben en `release/`:
 
-- macOS: imagen de instalación `.dmg` y archivo `.zip`.
-- Windows: instalador `.exe` (NSIS).
-- Linux: ejecutable `.AppImage`.
+| Plataforma | Formato |
+| --- | --- |
+| macOS | `.dmg` y `.zip` |
+| Windows x64 | instalador NSIS `.exe` |
+| Linux x64 | `.AppImage` |
 
-En macOS, el proceso reutiliza `/Applications/Ollama.app` si ya existe y, si no, descarga el
-paquete oficial. Para Windows x64, descarga el paquete autónomo oficial de Ollama, verifica su
-suma SHA-256 y lo incorpora al instalador; no es necesario tener un equipo Windows para construir
-el `.exe`. Debido al tamaño de los componentes de aceleración de Ollama, la descarga y el
-empaquetado pueden tardar varios minutos.
+Consideraciones de compilación:
 
-### Firma para distribución pública
+- En macOS se reutiliza `/Applications/Ollama.app` si está disponible; en caso contrario se descarga el paquete oficial.
+- Para Windows x64 se descarga una versión fijada de Ollama, se valida mediante SHA-256 y se incorpora al instalador.
+- En Linux debe existir Ollama en `/usr/lib/ollama` y `/usr/bin/ollama`, o deben definirse `EFFIWASTE_OLLAMA_RESOURCES` y `EFFIWASTE_OLLAMA_BINARY`.
+- Los instaladores destinados a distribución pública deben firmarse. macOS requiere además notarización para evitar avisos de Gatekeeper; Windows requiere un certificado de firma de código para reducir avisos de SmartScreen.
 
-Un instalador sin firma puede abrirse manualmente, pero macOS Gatekeeper o Windows SmartScreen
-mostrarán una advertencia. Para una distribución pública sin avisos es necesario firmar y, en
-macOS, notarizar el instalador con certificados propios de Apple; en Windows se requiere un
-certificado de firma de código. Electron Builder utiliza automáticamente las credenciales de firma
-configuradas en el entorno de compilación.
+## API
+
+### `GET /api/models`
+
+Comprueba la conexión y que `OLLAMA_MODEL` esté instalado.
+
+Respuesta correcta:
+
+```json
+{
+  "online": true
+}
+```
+
+Si Ollama no responde o falta el modelo, devuelve `503` y `online: false`.
+
+### `POST /api/recipes`
+
+Genera las recetas. La ruta sólo acepta solicitudes del mismo origen cuando el navegador envía la cabecera `Origin`.
+
+Ejemplo de cuerpo:
+
+```json
+{
+  "description": "2 kg de tomate, 500 g de queso y 3 barras de pan",
+  "servings": 6,
+  "maxTime": 45,
+  "restrictions": "sin frutos secos",
+  "style": "cocina canaria y mediterránea"
+}
+```
+
+Límites principales:
+
+| Campo | Límite |
+| --- | --- |
+| `description` | Obligatorio; máximo 12.000 caracteres |
+| `servings` | Entero entre 1 y 100 |
+| `maxTime` | Entero entre 10 y 180 minutos |
+| `restrictions` | Máximo 1.000 caracteres procesados |
+| `style` | Máximo 200 caracteres procesados |
+
+La respuesta contiene `introduction`, `recipes`, `discarded_items` y `closing_tip`. Cada receta incluye título, resumen, tiempos, dificultad, raciones, tamaño de porción, ingredientes, pasos, consejo de aprovechamiento y nota de seguridad.
+
+Estados de error relevantes: `400` para entrada incompleta, `403` para origen no permitido, `413` para una descripción demasiado larga, `502` para una respuesta inválida del modelo y `503` cuando el servicio de IA no está disponible o está mal configurado.
+
+## Desarrollo y verificación
+
+### Scripts disponibles
+
+| Comando | Función |
+| --- | --- |
+| `npm run dev` | Inicia Next.js en modo desarrollo. |
+| `npm run build` | Genera el build standalone de producción. |
+| `npm start` | Sirve el build de Next.js. |
+| `npm run dev:sites` | Inicia el entorno Vinext utilizado para esa variante del build. |
+| `npm run build:sites` | Genera el build Vinext utilizado por el empaquetado de escritorio. |
+| `npm run lint` | Ejecuta ESLint. |
+| `npm test` | Compila y ejecuta las pruebas web, de Ollama y de Docker. |
+| `npm run test:desktop` | Verifica la configuración del empaquetado de escritorio. |
+| `npm run db:generate` | Genera migraciones Drizzle si se añade un esquema. |
+| `npm run desktop:prepare` | Prepara el build web y Ollama para el sistema actual. |
+| `npm run desktop:prepare:win` | Prepara el build web y Ollama para Windows x64. |
+| `npm run desktop:dev` | Prepara y abre la aplicación Electron. |
+| `npm run desktop:package` | Crea una distribución de escritorio sin instalador. |
+| `npm run desktop:dist` | Construye los instaladores del sistema actual. |
+| `npm run desktop:dist:win` | Construye el instalador NSIS de Windows x64. |
+
+Antes de integrar cambios:
+
+```bash
+npm run lint
+npm test
+npm run test:desktop
+```
+
+La suite valida el flujo completo de recetas, el cliente seguro de Ollama, el aislamiento de red del despliegue, la imagen standalone sin privilegios y el contenido del paquete de escritorio.
+
+## Estructura del repositorio
+
+```text
+AIChef/
+├── app/                      # Interfaz Next.js y rutas API
+│   ├── api/models/           # Comprobación de Ollama y del modelo
+│   ├── api/recipes/          # Generación estructurada de recetas
+│   └── lib/ollama.ts         # Configuración y cliente de Ollama
+├── build/                    # Integración de build con Vinext
+├── db/                       # Extensión opcional para Drizzle/D1
+├── deploy/
+│   ├── docker/Caddyfile      # Proxy del despliegue completo
+│   └── ollama/               # Despliegue independiente de Ollama
+├── desktop/                  # Proceso principal y recursos de Electron
+├── public/                   # Imágenes y recursos estáticos
+├── scripts/                  # Despliegue y preparación de binarios
+├── tests/                    # Pruebas automatizadas
+├── worker/                   # Entrada para el build basado en Vinext
+├── compose.yaml              # Stack completo para CPU
+├── compose.gpu.yaml          # Override para GPU NVIDIA
+├── Dockerfile                # Imagen standalone de Next.js
+└── package.json              # Dependencias, scripts y metadatos
+```
+
+## Seguridad y privacidad
+
+- El navegador nunca recibe `OLLAMA_BASE_URL` ni `OLLAMA_API_KEY`.
+- Los archivos CSV/Excel se leen en el cliente; sólo el inventario normalizado se envía al backend al solicitar recetas.
+- El Compose completo separa la red pública de la red de IA y no publica Ollama ni Next.js directamente.
+- Las conexiones remotas a Ollama requieren HTTPS y token, salvo hosts internos de confianza o una excepción explícita.
+- La imagen de la aplicación se ejecuta con un usuario sin privilegios.
+- Electron habilita aislamiento de contexto, desactiva Node.js en la vista, deniega permisos y abre los enlaces externos fuera de la aplicación.
+- No existe persistencia de inventarios ni recetas en la versión actual.
+
+La comprobación de mismo origen es una defensa adicional, no un sistema completo de autenticación. Si la aplicación se expone públicamente, añade autenticación, límites de uso, monitorización y las políticas de red adecuadas para evitar consumo no autorizado de la capacidad de inferencia.
+
+## Resolución de problemas
+
+### La interfaz muestra «Ollama sin conexión»
+
+```bash
+ollama list
+curl http://127.0.0.1:11434/api/tags
+```
+
+Comprueba que Ollama está iniciado, que la URL es correcta y que el modelo indicado en `OLLAMA_MODEL` aparece en la lista. Después pulsa de nuevo el indicador de conexión.
+
+### El modelo no está instalado
+
+```bash
+ollama pull llama3.2:3b
+```
+
+En Docker Compose completo, revisa `docker compose logs ollama-init`. En el despliegue desacoplado, ejecuta el comando dentro del contenedor de Ollama.
+
+### Una URL remota es rechazada
+
+Los hosts remotos deben usar `https://` y tener `OLLAMA_API_KEY`. Reserva `OLLAMA_ALLOW_INSECURE_HTTP=true` para redes privadas y pruebas controladas.
+
+### La generación termina por tiempo de espera
+
+Revisa la carga y los logs de Ollama, confirma que el servidor tiene memoria suficiente y comprueba el límite de ejecución del proveedor web. La API espera hasta 285 segundos la respuesta de Ollama.
+
+### Caddy no obtiene el certificado
+
+Verifica que `APP_ADDRESS` u `OLLAMA_DOMAIN` coincide con el DNS público y que los puertos `80` y `443` llegan al servidor. Consulta los detalles con `docker compose logs caddy`.
+
+### El instalador de escritorio muestra una advertencia
+
+Los artefactos locales no están firmados por defecto. Para distribución pública, configura las credenciales de firma y notarización compatibles con Electron Builder.
+
+## Licencia
+
+Este repositorio no incluye actualmente un archivo `LICENSE`. Hasta que se añada uno, el uso, modificación y redistribución requieren autorización de la persona o entidad titular del proyecto.
