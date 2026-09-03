@@ -2,7 +2,7 @@
 
 ## Ollama
 
-Effiwaste AI Chef includes Ollama binaries. Ollama is distributed under the MIT License:
+Circular Chef includes Ollama binaries. Ollama is distributed under the MIT License:
 
 Copyright (c) Ollama
 

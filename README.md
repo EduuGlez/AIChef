@@ -1,4 +1,4 @@
-# Effiwaste AI Chef
+# Circular Chef
 
 Aplicación que propone tres recetas de reaprovechamiento a partir de los
 alimentos disponibles mediante Ollama. Puede ejecutarse localmente durante el

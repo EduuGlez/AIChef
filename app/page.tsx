@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type Recipe = {
@@ -300,10 +301,10 @@ export default function Home() {
   return (
     <main>
       <header className="site-header">
-        <a className="brand" href="#top" aria-label="AI Chef de Effiwaste, inicio">
-          <span className="brand-mark" aria-hidden="true">Effiwaste</span>
+        <a className="brand" href="#top" aria-label="Circular Chef, inicio">
+          <span className="brand-mark" aria-hidden="true">Circular</span>
           <span className="brand-product">
-            <strong>AI Chef</strong>
+            <strong>Chef</strong>
             <small>Asistente de cocina</small>
           </span>
         </a>
@@ -634,9 +635,55 @@ export default function Home() {
         </section>
       )}
 
-      <footer>
-        <span>Effiwaste · AI Chef</span>
-        <span>La IA propone; el equipo de cocina valida.</span>
+      <footer className="site-footer">
+        <section className="funding-banner" aria-labelledby="funding-title">
+          <div className="funding-project">
+            <span className="funding-kicker">Proyecto europeo</span>
+            <a
+              className="funding-logo-link"
+              href="https://www.fu-tourism.eu/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Visitar la web de FU-TOURISM (se abre en una pestaña nueva)"
+            >
+              <Image
+                className="funding-logo"
+                src="/fu-tourism-logo.png"
+                alt="FU-TOURISM"
+                width={425}
+                height={108}
+              />
+            </a>
+            <div className="funding-copy">
+              <h2 id="funding-title">Turismo más circular, digital y resiliente</h2>
+              <p>
+                Circular Chef forma parte del impulso hacia una hostelería que
+                aprovecha mejor sus recursos y reduce el desperdicio alimentario.
+              </p>
+            </div>
+            <a
+              className="funding-cta"
+              href="https://www.fu-tourism.eu/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Conoce FU-TOURISM <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+          <div className="funding-europe">
+            <Image
+              className="europe-image"
+              src="/europa.jpeg"
+              alt="Proyecto cofinanciado por la Unión Europea. Las opiniones expresadas pertenecen únicamente a sus autores."
+              width={1080}
+              height={775}
+            />
+          </div>
+        </section>
+        <div className="footer-bottom">
+          <span>Circular Chef</span>
+          <span>La IA propone; el equipo de cocina valida.</span>
+        </div>
       </footer>
     </main>
   );

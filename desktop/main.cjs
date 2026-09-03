@@ -39,7 +39,7 @@ async function log(message) {
   const logDirectory = app.getPath("logs");
   await mkdir(logDirectory, { recursive: true });
   await appendFile(
-    path.join(logDirectory, "effiwaste-ai-chef.log"),
+    path.join(logDirectory, "circular-chef.log"),
     `${new Date().toISOString()} ${message}\n`,
     "utf8",
   );
@@ -229,7 +229,7 @@ function createSetupWindow() {
     fullscreenable: false,
     show: false,
     backgroundColor: "#f4f8fb",
-    title: "Preparando Effiwaste AI Chef",
+    title: "Preparando Circular Chef",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -269,7 +269,7 @@ async function createMainWindow(url) {
     minHeight: 700,
     show: false,
     backgroundColor: "#f4f8fb",
-    title: "Effiwaste AI Chef",
+    title: "Circular Chef",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -310,7 +310,7 @@ async function startWithRecovery() {
     updateSetup("No se pudo completar la preparación.", 0);
     const result = await dialog.showMessageBox(setupWindow, {
       type: "error",
-      title: "Effiwaste AI Chef no pudo iniciarse",
+      title: "Circular Chef no pudo iniciarse",
       message: "No se pudo preparar la aplicación.",
       detail: `${error.message}\n\nComprueba la conexión a Internet y el espacio disponible.`,
       buttons: ["Reintentar", "Cerrar"],
@@ -340,8 +340,8 @@ if (!gotLock) {
   });
 
   app.whenReady().then(async () => {
-    app.setName("Effiwaste AI Chef");
-    if (process.platform === "win32") app.setAppUserModelId("com.effiwaste.aichef");
+    app.setName("Circular Chef");
+    if (process.platform === "win32") app.setAppUserModelId("com.circularchef.app");
     app.on("web-contents-created", (_event, contents) => {
       contents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
     });

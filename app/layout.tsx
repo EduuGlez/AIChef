@@ -5,16 +5,16 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("http://localhost:3000"),
-  title: "AI Chef | Effiwaste",
-  description: "Recetas profesionales de reaprovechamiento con Effiwaste AI Chef.",
+  title: "Circular Chef | Cocina circular con IA",
+  description: "Recetas profesionales de reaprovechamiento con Circular Chef.",
   openGraph: {
-    title: "AI Chef | Effiwaste",
+    title: "Circular Chef | Cocina circular con IA",
     description: "Aprovecha más. Desperdicia menos.",
     images: [{ url: "/og.png", width: 1536, height: 1024 }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "AI Chef | Effiwaste",
+    title: "Circular Chef | Cocina circular con IA",
     description: "Aprovecha más. Desperdicia menos.",
     images: ["/og.png"],
   },

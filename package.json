@@ -1,9 +1,9 @@
 {
-  "name": "effiwaste-ai-chef",
-  "productName": "Effiwaste AI Chef",
+  "name": "circular-chef",
+  "productName": "Circular Chef",
   "version": "0.1.0",
   "description": "Recetas profesionales de reaprovechamiento con inteligencia artificial local.",
-  "author": "Effiwaste",
+  "author": "Circular Chef",
   "private": true,
   "main": "desktop/main.cjs",
   "engines": {
@@ -63,8 +63,8 @@
   },
   "type": "module",
   "build": {
-    "appId": "com.effiwaste.aichef",
-    "productName": "Effiwaste AI Chef",
+    "appId": "com.circularchef.app",
+    "productName": "Circular Chef",
     "asar": true,
     "directories": {
       "output": "release"
@@ -93,7 +93,7 @@
         "to": "THIRD_PARTY_NOTICES.md"
       }
     ],
-    "artifactName": "Effiwaste-AI-Chef-${version}-${os}-${arch}.${ext}",
+    "artifactName": "Circular-Chef-${version}-${os}-${arch}.${ext}",
     "mac": {
       "target": [
         "dmg",
@@ -112,7 +112,7 @@
       ]
     },
     "dmg": {
-      "title": "Effiwaste AI Chef ${version}"
+      "title": "Circular Chef ${version}"
     },
     "win": {
       "target": "nsis",

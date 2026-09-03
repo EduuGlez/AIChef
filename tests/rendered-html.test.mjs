@@ -16,8 +16,8 @@ test("contains the complete AI Chef recipe flow", async () => {
   ]);
 
   assert.match(page, /Escribir sobrantes/);
-  assert.match(page, /Effiwaste/);
-  assert.match(page, /AI Chef/);
+  assert.match(page, /Circular Chef/);
+  assert.doesNotMatch(page, /Effiwaste/i);
   assert.match(page, /Subir CSV \/ Excel/);
   assert.match(page, /accept="\.csv,\.xlsx"/);
   assert.match(page, /PREVISUALIZACIÓN/);
@@ -44,7 +44,10 @@ test("contains the complete AI Chef recipe flow", async () => {
   assert.match(ollamaClient, /OLLAMA_API_KEY/);
   assert.match(ollamaClient, /Authorization/);
   assert.match(ollamaClient, /El Ollama remoto debe estar protegido con HTTPS/);
-  assert.match(layout, /AI Chef \| Effiwaste/);
+  assert.match(layout, /Circular Chef \| Cocina circular con IA/);
+  assert.match(page, /https:\/\/www\.fu-tourism\.eu\//);
+  assert.match(page, /\/fu-tourism-logo\.png/);
+  assert.match(page, /\/europa\.jpeg/);
   assert.doesNotMatch(page, /Prueba con:|Modelo local|100 % local|Modelo de Ollama|Nombre del modelo|ingredient\.origin/);
   assert.doesNotMatch(page, /SkeletonPreview|codex-preview/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
