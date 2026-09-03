@@ -1,0 +1,151 @@
+{
+  "name": "effiwaste-ai-chef",
+  "productName": "Effiwaste AI Chef",
+  "version": "0.1.0",
+  "description": "Recetas profesionales de reaprovechamiento con inteligencia artificial local.",
+  "author": "Effiwaste",
+  "private": true,
+  "main": "desktop/main.cjs",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "next start",
+    "dev:sites": "vinext dev",
+    "build:sites": "vinext build",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/ollama-client.test.mjs",
+    "test:desktop": "node --test tests/desktop-packaging.test.mjs",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "db:generate": "drizzle-kit generate",
+    "desktop:prepare": "npm run build:sites && node scripts/prepare-ollama.mjs",
+    "desktop:prepare:win": "npm run build:sites && node scripts/prepare-ollama.mjs --platform win32",
+    "desktop:dev": "npm run desktop:prepare && electron .",
+    "desktop:package": "npm run desktop:prepare && electron-builder --dir",
+    "desktop:dist": "npm run desktop:prepare && electron-builder",
+    "desktop:dist:win": "npm run desktop:prepare:win && electron-builder --win nsis --x64"
+  },
+  "dependencies": {
+    "@fontsource-variable/montserrat": "5.3.0",
+    "@fontsource-variable/roboto": "5.3.0",
+    "drizzle-orm": "0.45.2",
+    "next": "16.3.4",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "read-excel-file": "9.2.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.37.1",
+    "@eslint/js": "9.39.4",
+    "@next/eslint-plugin-next": "16.3.4",
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "drizzle-kit": "0.31.10",
+    "electron": "^44.1.1",
+    "electron-builder": "^26.15.3",
+    "eslint": "9.39.4",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "16.4.0",
+    "react-server-dom-webpack": "19.2.6",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.59.3",
+    "vinext": "1.0.0-beta.2",
+    "vite": "8.0.13",
+    "wrangler": "4.92.0"
+  },
+  "type": "module",
+  "build": {
+    "appId": "com.effiwaste.aichef",
+    "productName": "Effiwaste AI Chef",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/standalone",
+        "to": "webapp",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "dist/standalone/node_modules",
+        "to": "webapp/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "desktop/THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
+      }
+    ],
+    "artifactName": "Effiwaste-AI-Chef-${version}-${os}-${arch}.${ext}",
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "desktop/assets/icon.png",
+      "extraResources": [
+        {
+          "from": ".desktop-vendor/ollama-darwin",
+          "to": "ollama",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Effiwaste AI Chef ${version}"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "desktop/assets/icon.png",
+      "extraResources": [
+        {
+          "from": ".desktop-vendor/ollama-win32-x64",
+          "to": "ollama",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Utility",
+      "icon": "desktop/assets/icon.png",
+      "extraResources": [
+        {
+          "from": ".desktop-vendor/ollama-linux-x64",
+          "to": "ollama",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
+    }
+  }
+}
