@@ -10,6 +10,7 @@ La clave de OpenAI nunca se envía al navegador. El backend valida las entradas,
 - Importación de inventario desde CSV o Excel.
 - Configuración de comensales, tiempo máximo, estilo y restricciones.
 - Tres recetas con cantidades, preparación, pasos, tiempos y temperaturas.
+- Descarga individual de cada receta en PDF desde el navegador.
 - Notas de aprovechamiento, seguridad alimentaria y elementos descartados.
 - Comprobación del estado de la conexión con OpenAI.
 - Aplicación web, despliegue Docker y empaquetado de escritorio.
@@ -197,11 +198,13 @@ Los artefactos se generan en `release/`.
   "servings": 4,
   "maxTime": 45,
   "restrictions": "sin frutos secos",
-  "style": "mediterránea"
+  "style": "mediterránea",
+  "recipeNumber": 2,
+  "previousRecipes": ["Croquetas de pollo y arroz: crujientes y cremosas"]
 }
 ```
 
-El endpoint limita tamaños y rangos, rechaza solicitudes de otro origen y utiliza salida estructurada estricta. Las respuestas se solicitan con `store: false`.
+El navegador realiza tres peticiones consecutivas y añade cada receta a la pantalla en cuanto está lista. `recipeNumber` identifica la propuesta en curso y `previousRecipes` evita repetir las ya generadas. El endpoint limita tamaños y rangos, rechaza solicitudes de otro origen y utiliza salida estructurada estricta de una receta por respuesta. Las respuestas se solicitan con `store: false`.
 
 ## Calidad y pruebas
 

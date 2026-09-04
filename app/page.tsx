@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { downloadRecipePdf } from "./lib/recipe-pdf";
 
 type Recipe = {
   title: string;
@@ -161,6 +162,11 @@ export default function Home() {
   const [result, setResult] = useState<RecipeResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [generatingRecipe, setGeneratingRecipe] = useState(0);
+  const [downloadingRecipe, setDownloadingRecipe] = useState<number | null>(null);
+  const [pdfError, setPdfError] = useState("");
+  const resultsRef = useRef<HTMLElement>(null);
+  const hasScrolledToResults = useRef(false);
 
   const sourceText = useMemo(() => {
     if (mode === "natural") return description;
@@ -256,6 +262,26 @@ export default function Home() {
     return () => window.clearTimeout(connectionCheck);
   }, [checkConnection]);
 
+  useEffect(() => {
+    if (result?.recipes.length !== 1 || hasScrolledToResults.current) return;
+
+    hasScrolledToResults.current = true;
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [result?.recipes.length]);
+
+  async function handleRecipeDownload(recipe: Recipe, recipeNumber: number) {
+    setDownloadingRecipe(recipeNumber);
+    setPdfError("");
+    try {
+      await downloadRecipePdf(recipe, recipeNumber);
+    } catch (caught) {
+      console.error("No se pudo crear el PDF", caught);
+      setPdfError("No se pudo crear el PDF de la receta. Inténtalo de nuevo.");
+    } finally {
+      setDownloadingRecipe(null);
+    }
+  }
+
   async function generateRecipes(event: FormEvent) {
     event.preventDefault();
     if (mode === "file" && uploadedIngredients.some((ingredient) => !isCompleteIngredient(ingredient))) {
@@ -268,33 +294,73 @@ export default function Home() {
     }
 
     setLoading(true);
+    setGeneratingRecipe(1);
     setError("");
+    setPdfError("");
     setResult(null);
+    hasScrolledToResults.current = false;
+
+    let completedRecipes = 0;
 
     try {
-      const response = await fetch("/api/recipes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description: sourceText.trim(),
-          servings: Number(servings) || 4,
-          maxTime: Number(maxTime) || 45,
-          restrictions: restrictions.trim(),
-          style: style.trim(),
-        }),
-      });
+      const requestData = {
+        description: sourceText.trim(),
+        servings: Number(servings) || 4,
+        maxTime: Number(maxTime) || 45,
+        restrictions: restrictions.trim(),
+        style: style.trim(),
+      };
+      const previousRecipes: string[] = [];
+      const accumulatedRecipes: Recipe[] = [];
+      const accumulatedDiscardedItems: string[] = [];
+      let introduction = "";
+      let closingTip = "";
 
-      const data = (await response.json()) as RecipeResponse & { error?: string };
-      if (!response.ok) throw new Error(data.error || "No se pudieron generar las recetas.");
-      setResult(data);
+      for (let recipeNumber = 1; recipeNumber <= 3; recipeNumber += 1) {
+        setGeneratingRecipe(recipeNumber);
+
+        const response = await fetch("/api/recipes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...requestData,
+            recipeNumber,
+            previousRecipes,
+          }),
+        });
+
+        const data = (await response.json()) as RecipeResponse & { error?: string };
+        if (!response.ok) throw new Error(data.error || `No se pudo generar la receta ${recipeNumber}.`);
+
+        const recipe = data.recipes?.[0];
+        if (!recipe) throw new Error(`La receta ${recipeNumber} llegó incompleta.`);
+
+        introduction ||= data.introduction;
+        closingTip = data.closing_tip || closingTip;
+        accumulatedRecipes.push(recipe);
+        for (const discardedItem of data.discarded_items ?? []) {
+          if (!accumulatedDiscardedItems.includes(discardedItem)) {
+            accumulatedDiscardedItems.push(discardedItem);
+          }
+        }
+
+        previousRecipes.push(`${recipe.title}: ${recipe.summary}`);
+        completedRecipes = recipeNumber;
+        setResult({
+          introduction,
+          recipes: [...accumulatedRecipes],
+          discarded_items: [...accumulatedDiscardedItems],
+          closing_tip: closingTip,
+        });
+      }
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "No se pudieron generar las recetas.",
-      );
+      const detail = caught instanceof Error ? caught.message : "No se pudieron generar las recetas.";
+      setError(completedRecipes > 0
+        ? `Ya puedes consultar ${completedRecipes === 1 ? "la primera receta" : `las ${completedRecipes} primeras recetas`}, pero la generación se detuvo: ${detail}`
+        : detail);
     } finally {
       setLoading(false);
+      setGeneratingRecipe(0);
     }
   }
 
@@ -508,7 +574,9 @@ export default function Home() {
             {error && <div className="notice error" role="alert">{error}</div>}
 
             <button className="generate-button" type="submit" disabled={loading}>
-              {loading ? <><span className="spinner" /> Pensando recetas…</> : <>Generar 3 recetas <span>→</span></>}
+              {loading
+                ? <><span className="spinner" /> Generando receta {generatingRecipe} de 3…</>
+                : <>Generar 3 recetas <span>→</span></>}
             </button>
           </form>
         </div>
@@ -525,12 +593,46 @@ export default function Home() {
       </section>
 
       {result && (
-        <section className="results" aria-live="polite">
+        <section className="results" ref={resultsRef}>
           <div className="results-heading">
             <div><span className="section-number">03</span><p>PROPUESTAS</p></div>
-            <h2>Tres formas de aprovecharlo</h2>
+            <h2>
+              {result.recipes.length === 1
+                ? "Una propuesta lista"
+                : result.recipes.length === 2
+                  ? "Dos propuestas listas"
+                  : "Tres formas de aprovecharlo"}
+            </h2>
             <p>{result.introduction}</p>
           </div>
+
+          <div
+            className={`generation-progress ${loading ? "active" : result.recipes.length === 3 ? "complete" : "interrupted"}`}
+            role="status"
+            aria-live="polite"
+          >
+            {loading ? (
+              <>
+                <span className="progress-spinner" aria-hidden="true" />
+                <div>
+                  <b>Receta {result.recipes.length} lista. Generando la {generatingRecipe} de 3…</b>
+                  <span>Puedes consultar las propuestas terminadas mientras preparamos la siguiente.</span>
+                </div>
+              </>
+            ) : result.recipes.length === 3 ? (
+              <><span aria-hidden="true">✓</span><b>Las 3 recetas están listas.</b></>
+            ) : (
+              <>
+                <span aria-hidden="true">!</span>
+                <div>
+                  <b>La generación se detuvo antes de completar las 3 recetas.</b>
+                  {error && <span>{error}</span>}
+                </div>
+              </>
+            )}
+          </div>
+
+          {pdfError && <div className="notice error pdf-error" role="alert">{pdfError}</div>}
 
           {result.discarded_items?.length > 0 && (
             <div className="discard-warning">
@@ -569,7 +671,19 @@ export default function Home() {
               <article className="recipe-card" key={`${recipe.title}-${index}`}>
                 <div className="recipe-topline">
                   <span>RECETA {String(index + 1).padStart(2, "0")}</span>
-                  <span>{recipe.difficulty}</span>
+                  <div className="recipe-actions">
+                    <span className="recipe-difficulty">{recipe.difficulty}</span>
+                    <button
+                      className="download-recipe"
+                      type="button"
+                      onClick={() => void handleRecipeDownload(recipe, index + 1)}
+                      disabled={downloadingRecipe !== null}
+                      aria-label={`Descargar ${recipe.title} en PDF`}
+                    >
+                      <span aria-hidden="true">↓</span>
+                      {downloadingRecipe === index + 1 ? "Creando PDF…" : "Descargar PDF"}
+                    </button>
+                  </div>
                 </div>
                 <h3>{recipe.title}</h3>
                 <p>{recipe.summary}</p>
@@ -631,7 +745,7 @@ export default function Home() {
               );
             })}
           </div>
-          <p className="closing-tip">{result.closing_tip}</p>
+          {!loading && <p className="closing-tip">{result.closing_tip}</p>}
         </section>
       )}
 

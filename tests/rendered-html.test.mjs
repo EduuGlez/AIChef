@@ -5,11 +5,12 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 
 test("contains the complete Circular Chef recipe flow", async () => {
-  const [page, recipesRoute, modelsRoute, openAIClient, layout, styles, packageJson] = await Promise.all([
+  const [page, recipesRoute, modelsRoute, openAIClient, recipePdf, layout, styles, packageJson] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/api/recipes/route.ts", root), "utf8"),
     readFile(new URL("app/api/models/route.ts", root), "utf8"),
     readFile(new URL("app/lib/openai.ts", root), "utf8"),
+    readFile(new URL("app/lib/recipe-pdf.ts", root), "utf8"),
     readFile(new URL("app/layout.tsx", root), "utf8"),
     readFile(new URL("app/globals.css", root), "utf8"),
     readFile(new URL("package.json", root), "utf8"),
@@ -32,7 +33,20 @@ test("contains the complete Circular Chef recipe flow", async () => {
   assert.match(page, /recipe\.ingredients \?\?/);
   assert.match(page, /recipe\.uses \?\?/);
   assert.match(recipesRoute, /openAIFetch\("responses"/);
-  assert.match(recipesRoute, /exactamente 3 recetas/);
+  assert.match(recipesRoute, /exactamente 1 receta/);
+  assert.match(recipesRoute, /minItems: 1/);
+  assert.match(recipesRoute, /maxItems: 1/);
+  assert.match(recipesRoute, /previousRecipes/);
+  assert.match(page, /for \(let recipeNumber = 1; recipeNumber <= 3; recipeNumber \+= 1\)/);
+  assert.match(page, /recipes: \[\.\.\.accumulatedRecipes\]/);
+  assert.match(page, /Generando receta \{generatingRecipe\} de 3/);
+  assert.match(page, /Descargar PDF/);
+  assert.match(page, /handleRecipeDownload\(recipe, index \+ 1\)/);
+  assert.match(page, /await downloadRecipePdf\(recipe, recipeNumber\)/);
+  assert.match(recipePdf, /await import\("jspdf"\)/);
+  assert.match(recipePdf, /Elaboración paso a paso/);
+  assert.match(recipePdf, /Control APPCC/);
+  assert.match(recipePdf, /doc\.save\(safeFilename\(recipe\.title\)\)/);
   assert.match(recipesRoute, /prep_time_minutes/);
   assert.match(recipesRoute, /duration_minutes/);
   assert.match(recipesRoute, /No uses expresiones vagas/);

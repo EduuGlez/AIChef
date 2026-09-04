@@ -153,11 +153,26 @@ main { min-height: 100vh; }
 .results-heading > div p { font-size: 10px; font-weight: 800; letter-spacing: .18em; }
 .results-heading h2 { margin: 0; font: 600 38px/1.05 "Montserrat Variable", Arial, sans-serif; }
 .results-heading > p { margin: 0; color: var(--muted); line-height: 1.55; font-size: 13px; }
+.generation-progress { display: flex; align-items: center; gap: 11px; margin-top: 24px; padding: 12px 15px; border-radius: 11px; font-size: 11px; }
+.generation-progress.active { background: #eaf5fa; color: var(--green); }
+.generation-progress.complete { background: #eef6e4; color: #47672b; }
+.generation-progress.interrupted { background: #fae9e4; color: #8c3824; }
+.generation-progress > span:first-child { flex: 0 0 auto; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: white; font-weight: 900; }
+.generation-progress > div { display: flex; flex-direction: column; gap: 2px; }
+.generation-progress > div > span { color: var(--muted); }
+.progress-spinner { border: 2px solid rgba(11,83,148,.2); border-top-color: var(--green); animation: spin .8s linear infinite; }
 .discard-warning { margin-top: 26px; padding: 13px 16px; background: #eaf9fa; border-left: 3px solid var(--terracotta); font-size: 12px; }
 .recipe-grid { display: grid; grid-template-columns: 1fr; gap: 24px; margin-top: 30px; }
-.recipe-card { display: flex; flex-direction: column; padding: 24px; background: white; border: 1px solid #dce8ed; border-radius: 16px; box-shadow: 0 8px 28px rgba(11,83,148,.06); }
-.recipe-topline { display: flex; justify-content: space-between; color: var(--green); font-size: 9px; font-weight: 800; letter-spacing: .14em; }
-.recipe-topline span:last-child { color: var(--terracotta); }
+.recipe-card { display: flex; flex-direction: column; padding: 24px; background: white; border: 1px solid #dce8ed; border-radius: 16px; box-shadow: 0 8px 28px rgba(11,83,148,.06); animation: recipe-reveal .42s ease-out both; }
+.recipe-topline { display: flex; justify-content: space-between; align-items: center; gap: 16px; color: var(--green); font-size: 9px; font-weight: 800; letter-spacing: .14em; }
+.recipe-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.recipe-difficulty { color: var(--terracotta); }
+.download-recipe { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid #c9dde6; border-radius: 8px; background: #f7fbfd; color: var(--green); font-size: 9px; font-weight: 800; letter-spacing: .02em; cursor: pointer; transition: border-color .2s ease, background .2s ease, transform .2s ease; }
+.download-recipe:hover:not(:disabled) { border-color: var(--green); background: #eef7fb; transform: translateY(-1px); }
+.download-recipe:focus-visible { outline: 3px solid rgba(0,182,189,.25); outline-offset: 2px; }
+.download-recipe:disabled { opacity: .6; cursor: wait; }
+.download-recipe span { color: var(--terracotta); font-size: 14px; line-height: 1; }
+.pdf-error { margin-bottom: 0; }
 .recipe-card h3 { margin: 19px 0 8px; font: 600 25px/1.1 "Montserrat Variable", Arial, sans-serif; }
 .recipe-card > p { color: var(--muted); font-size: 12px; line-height: 1.55; }
 .recipe-meta { display: flex; gap: 8px; flex-wrap: wrap; padding: 13px 0; margin: 8px 0 20px; border-top: 1px solid #e5eef2; border-bottom: 1px solid #e5eef2; color: #526d80; font-size: 10px; }
@@ -219,6 +234,7 @@ main { min-height: 100vh; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .35; } }
+@keyframes recipe-reveal { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-width: 900px) {
   .workspace { grid-template-columns: 1fr; }
@@ -260,6 +276,8 @@ main { min-height: 100vh; }
   .funding-europe { padding: 18px; }
   .footer-bottom { flex-direction: column; gap: 6px; }
   .recipe-footer { grid-template-columns: 1fr; }
+  .recipe-topline { align-items: flex-start; }
+  .recipe-actions { align-items: flex-end; flex-direction: column; gap: 7px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

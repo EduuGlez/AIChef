@@ -10,6 +10,63 @@ export const maxDuration = 300;
 const MAX_DESCRIPTION_LENGTH = 12_000;
 const MAX_RESTRICTIONS_LENGTH = 1_000;
 const MAX_STYLE_LENGTH = 200;
+const MAX_PREVIOUS_RECIPE_LENGTH = 500;
+
+const recipeItemSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    title: { type: "string" },
+    summary: { type: "string" },
+    time_minutes: { type: "integer" },
+    prep_time_minutes: { type: "integer" },
+    cooking_time_minutes: { type: "integer" },
+    difficulty: { type: "string" },
+    servings: { type: "integer" },
+    portion_size: { type: "string" },
+    ingredients: {
+      type: "array",
+      minItems: 2,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          name: { type: "string" },
+          amount: { type: "number" },
+          unit: {
+            type: "string",
+            enum: ["g", "kg", "ml", "l", "unidad", "cucharadita", "cucharada"],
+          },
+          preparation: { type: "string" },
+        },
+        required: ["name", "amount", "unit", "preparation"],
+      },
+    },
+    steps: {
+      type: "array",
+      minItems: 5,
+      maxItems: 10,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          number: { type: "integer" },
+          instruction: { type: "string" },
+          duration_minutes: { type: "integer" },
+          temperature: { type: "string" },
+        },
+        required: ["number", "instruction", "duration_minutes", "temperature"],
+      },
+    },
+    waste_tip: { type: "string" },
+    safety_note: { type: "string" },
+  },
+  required: [
+    "title", "summary", "time_minutes", "prep_time_minutes",
+    "cooking_time_minutes", "difficulty", "servings", "portion_size",
+    "ingredients", "steps", "waste_tip", "safety_note",
+  ],
+};
 
 const recipeSchema = {
   type: "object",
@@ -18,63 +75,9 @@ const recipeSchema = {
     introduction: { type: "string" },
     recipes: {
       type: "array",
-      minItems: 3,
-      maxItems: 3,
-      items: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          title: { type: "string" },
-          summary: { type: "string" },
-          time_minutes: { type: "integer" },
-          prep_time_minutes: { type: "integer" },
-          cooking_time_minutes: { type: "integer" },
-          difficulty: { type: "string" },
-          servings: { type: "integer" },
-          portion_size: { type: "string" },
-          ingredients: {
-            type: "array",
-            minItems: 2,
-            items: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                name: { type: "string" },
-                amount: { type: "number" },
-                unit: {
-                  type: "string",
-                  enum: ["g", "kg", "ml", "l", "unidad", "cucharadita", "cucharada"],
-                },
-                preparation: { type: "string" },
-              },
-              required: ["name", "amount", "unit", "preparation"],
-            },
-          },
-          steps: {
-            type: "array",
-            minItems: 5,
-            maxItems: 10,
-            items: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                number: { type: "integer" },
-                instruction: { type: "string" },
-                duration_minutes: { type: "integer" },
-                temperature: { type: "string" },
-              },
-              required: ["number", "instruction", "duration_minutes", "temperature"],
-            },
-          },
-          waste_tip: { type: "string" },
-          safety_note: { type: "string" },
-        },
-        required: [
-          "title", "summary", "time_minutes", "prep_time_minutes",
-          "cooking_time_minutes", "difficulty", "servings", "portion_size",
-          "ingredients", "steps", "waste_tip", "safety_note",
-        ],
-      },
+      minItems: 1,
+      maxItems: 1,
+      items: recipeItemSchema,
     },
     discarded_items: { type: "array", items: { type: "string" } },
     closing_tip: { type: "string" },
@@ -149,6 +152,8 @@ export async function POST(request: Request) {
       maxTime?: number;
       restrictions?: string;
       style?: string;
+      recipeNumber?: number;
+      previousRecipes?: string[];
     };
 
     const description = boundedText(body.description, MAX_DESCRIPTION_LENGTH);
@@ -156,6 +161,13 @@ export async function POST(request: Request) {
     const maxTime = boundedInteger(body.maxTime, 45, 10, 180);
     const restrictions = boundedText(body.restrictions, MAX_RESTRICTIONS_LENGTH);
     const style = boundedText(body.style, MAX_STYLE_LENGTH);
+    const recipeNumber = boundedInteger(body.recipeNumber, 1, 1, 3);
+    const previousRecipes = Array.isArray(body.previousRecipes)
+      ? body.previousRecipes
+          .slice(0, 2)
+          .map((recipe) => boundedText(recipe, MAX_PREVIOUS_RECIPE_LENGTH))
+          .filter(Boolean)
+      : [];
 
     if (!description) {
       return Response.json({ error: "Indica qué alimentos han sobrado." }, { status: 400 });
@@ -170,9 +182,9 @@ export async function POST(request: Request) {
 
     const prompt = `
 OBJETIVO
-Crear exactamente 3 recetas profesionales, diferentes entre sí, detalladas y realmente
-ejecutables en una cocina. Deben aprovechar los alimentos disponibles sin sacrificar la
-calidad culinaria ni la seguridad alimentaria.
+Crear exactamente 1 receta profesional, detallada y realmente ejecutable en una cocina.
+Esta es la receta ${recipeNumber} de 3. Debe aprovechar los alimentos disponibles sin sacrificar
+la calidad culinaria ni la seguridad alimentaria.
 
 DATOS DE PARTIDA
 - Alimentos disponibles: ${description}
@@ -180,6 +192,7 @@ DATOS DE PARTIDA
 - Tiempo máximo total por receta: ${maxTime} minutos
 - Estilo culinario solicitado: ${style || "cocina sencilla y mediterránea"}
 - Restricciones o alergias: ${restrictions || "ninguna indicada"}
+${previousRecipes.length > 0 ? `- Recetas ya propuestas que NO debes repetir: ${previousRecipes.join(" | ")}` : ""}
 
 REGLAS PARA LOS INGREDIENTES
 1. Incluye en ingredients TODOS los ingredientes necesarios, tanto los sobrantes como los
@@ -207,7 +220,8 @@ REGLAS PARA LA ELABORACIÓN
 6. Evita pasos genéricos como “cocinar hasta que esté hecho” o “preparar normalmente”.
 
 CALIDAD Y SEGURIDAD
-- Las tres recetas deben utilizar técnicas o presentaciones claramente diferentes.
+- La receta debe utilizar una técnica y una presentación claramente diferentes de las recetas
+  ya propuestas, si las hay.
 - Respeta estrictamente todas las restricciones y alergias indicadas.
 - No uses alimentos deteriorados, restos de platos de clientes, productos de procedencia dudosa
   ni alimentos que puedan no ser seguros. Añádelos a discarded_items con un motivo breve y
@@ -227,7 +241,7 @@ SALIDA
       body: JSON.stringify({
         model: getOpenAIModel(),
         store: false,
-        max_output_tokens: 6_000,
+        max_output_tokens: 3_500,
         reasoning: {
           effort: "low",
         },
