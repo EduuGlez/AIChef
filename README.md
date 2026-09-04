@@ -65,7 +65,7 @@ La comunicación con Ollama siempre se realiza desde el servidor de la aplicaci�
 | Modalidad | Uso recomendado | Ollama | HTTPS |
 | --- | --- | --- | --- |
 | Desarrollo local | Programación y pruebas | Instalado en el equipo | No necesario en `localhost` |
-| Docker Compose completo | Servidor propio y producción autocontenida | Contenedor privado | Caddy lo gestiona automáticamente |
+| Docker Compose completo | Servidor propio detrás de Nginx | Contenedor privado | Nginx y Certbot lo gestionan |
 | Web + Ollama remoto | Vercel u otro hosting para Next.js | Servidor separado | Obligatorio entre servicios |
 | Escritorio | Usuarios sin entorno de desarrollo | Incluido en el instalador | No; todo escucha en loopback |
 
@@ -74,8 +74,8 @@ La comunicación con Ollama siempre se realiza desde el servidor de la aplicaci�
 - **Next.js 16**, React 19 y TypeScript.
 - **Ollama** con `llama3.2:3b` como modelo predeterminado.
 - **Electron** y Electron Builder para las aplicaciones de escritorio.
-- **Docker Compose** para orquestar Next.js, Ollama y Caddy.
-- **Caddy** como proxy inverso y terminación TLS.
+- **Docker Compose** para orquestar Next.js y Ollama.
+- **Nginx** en el servidor como proxy inverso y terminación TLS.
 - `read-excel-file` para interpretar `.xlsx` en el navegador.
 - ESLint y el runner de pruebas nativo de Node.js para calidad y verificación.
 
@@ -198,32 +198,34 @@ El archivo `.env.example` contiene la configuración de Docker Compose:
 
 | Variable | Obligatoria | Descripción |
 | --- | --- | --- |
-| `APP_ADDRESS` | Sí | Dominio público de la aplicación o `http://IP` para una prueba sin TLS. |
+| `APP_PORT` | No | Puerto local de la aplicación. Por defecto `3100`; sólo se enlaza a `127.0.0.1`. |
 | `OLLAMA_MODEL` | No | Modelo descargado por `ollama-init`. |
 | `OLLAMA_KEEP_ALIVE` | No | Tiempo durante el que Ollama mantiene el modelo cargado. |
 | `APP_IMAGE` | No | Nombre o etiqueta de la imagen local de la aplicación. |
 | `OLLAMA_IMAGE` | No | Imagen y versión de Ollama. |
-| `CADDY_IMAGE` | No | Imagen y versión de Caddy. |
 | `COMPOSE_FILE` | No | Permite activar el override de GPU de forma permanente. |
 
 No publiques el archivo `.env` ni tokens reales en el repositorio.
 
 ## Despliegue con Docker Compose
 
-Es la opción recomendada para un servidor propio. El conjunto levanta cuatro servicios:
+Esta configuración está preparada para un servidor que ya ejecuta Nginx. Docker
+Compose levanta tres servicios:
 
-- `caddy`: único servicio publicado; atiende en `80`, `443/tcp` y `443/udp`.
-- `app`: aplicación Next.js ejecutada como usuario sin privilegios.
+- `app`: aplicación Next.js ejecutada como usuario sin privilegios y publicada
+  únicamente en `127.0.0.1:3100`.
 - `ollama`: motor de inferencia accesible sólo desde la red privada `ai-backend`.
 - `ollama-init`: tarea de inicialización que descarga el modelo antes de iniciar la web.
 
-Los puertos `3000` y `11434` no se publican en el host.
+El puerto `11434` de Ollama no se publica. El puerto `3100` de la aplicación no
+acepta conexiones desde Internet porque está enlazado exclusivamente a loopback.
+Nginx es el único servicio que atiende públicamente en `80` y `443`.
 
 ### Requisitos del servidor
 
-- Linux con Git, Docker Engine y Docker Compose v2.
+- Linux con Git, Docker Engine, Docker Compose v2 y Nginx.
 - DNS del dominio apuntando a la IP pública.
-- Puertos TCP `80` y `443`, UDP `443` y el puerto de SSH permitidos en el cortafuegos.
+- Puertos TCP `80`, `443` y el puerto de SSH permitidos en el cortafuegos.
 - Espacio suficiente para imágenes, modelo y caché. El primer arranque descarga varios GB.
 - Para GPU: controlador NVIDIA y NVIDIA Container Toolkit.
 
@@ -235,10 +237,10 @@ cd AIChef
 cp .env.example .env
 ```
 
-Edita `.env` y sustituye el dominio de ejemplo:
+Revisa `.env`; para utilizar el puerto local previsto basta con mantener:
 
 ```dotenv
-APP_ADDRESS=chef.example.com
+APP_PORT=3100
 OLLAMA_MODEL=llama3.2:3b
 OLLAMA_KEEP_ALIVE=30m
 ```
@@ -254,12 +256,56 @@ La primera ejecución tarda más porque `ollama-init` descarga el modelo en el v
 ```bash
 docker compose logs -f ollama-init
 docker compose ps
-docker compose logs --tail=100 app caddy ollama
+docker compose logs --tail=100 app ollama
 ```
 
-Que `ollama-init` aparezca como `Exited (0)` después de terminar es normal. Caddy solicitará y renovará el certificado automáticamente cuando el DNS y los puertos sean accesibles.
+Que `ollama-init` aparezca como `Exited (0)` después de terminar es normal.
 
-Para una prueba temporal sin dominio se puede usar `APP_ADDRESS=http://IP_DEL_SERVIDOR`. Esa configuración no tiene HTTPS y no es adecuada para producción.
+Comprueba desde el propio servidor que la aplicación responde:
+
+```bash
+curl -I http://127.0.0.1:3100
+```
+
+### Configurar el dominio en Nginx
+
+El repositorio incluye una configuración lista para el dominio temporal
+`aichef.tudominio.com`. Antes de continuar, crea en tu proveedor DNS un registro
+`A` con ese subdominio apuntando a la IP pública del servidor.
+
+Instala la configuración de Nginx:
+
+```bash
+sudo cp deploy/nginx/aichef.conf /etc/nginx/sites-available/aichef
+sudo ln -s /etc/nginx/sites-available/aichef /etc/nginx/sites-enabled/aichef
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Si el enlace ya existe, no vuelvas a ejecutar `ln -s`. La plantilla envía las
+peticiones a `http://127.0.0.1:3100` y admite hasta 300 segundos de espera para
+las generaciones de Ollama.
+
+Instala Certbot si todavía no está disponible y solicita el certificado:
+
+```bash
+sudo apt update
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d aichef.tudominio.com
+```
+
+Certbot añadirá HTTPS a la configuración y renovará el certificado
+automáticamente. Comprueba el resultado con:
+
+```bash
+sudo nginx -t
+sudo systemctl status nginx --no-pager
+curl -I https://aichef.tudominio.com
+```
+
+Para usar el dominio definitivo, cambia `server_name` en
+`/etc/nginx/sites-available/aichef`, valida y recarga Nginx, y solicita un
+certificado para el nuevo nombre. El dominio no se configura dentro de Docker.
 
 ### Aceleración con GPU NVIDIA
 
@@ -285,7 +331,7 @@ El script comprueba la rama y la existencia de `.env`, ejecuta un `git pull --ff
 
 ```bash
 git pull --ff-only origin main
-docker compose pull ollama ollama-init caddy
+docker compose pull ollama ollama-init
 docker compose up -d --build --remove-orphans
 docker compose ps
 ```
@@ -301,7 +347,7 @@ docker compose logs -f
 # Reiniciar sin eliminar datos
 docker compose restart
 
-# Detener conservando modelo y certificados
+# Detener conservando el modelo
 docker compose down
 
 # Consultar los modelos instalados
@@ -309,7 +355,8 @@ docker compose exec ollama ollama list
 ```
 
 > [!CAUTION]
-> `docker compose down -v` elimina los volúmenes, incluido el modelo descargado y los datos de certificados de Caddy.
+> `docker compose down -v` elimina los volúmenes, incluido el modelo descargado.
+> Los certificados de Nginx/Certbot están fuera de Docker y no se ven afectados.
 
 ## Despliegue separado: web y Ollama
 
@@ -507,7 +554,7 @@ AIChef/
 ├── build/                    # Integración de build con Vinext
 ├── db/                       # Extensión opcional para Drizzle/D1
 ├── deploy/
-│   ├── docker/Caddyfile      # Proxy del despliegue completo
+│   ├── nginx/aichef.conf     # Virtual host del despliegue completo
 │   └── ollama/               # Despliegue independiente de Ollama
 ├── desktop/                  # Proceso principal y recursos de Electron
 ├── public/                   # Imágenes y recursos estáticos
@@ -524,7 +571,7 @@ AIChef/
 
 - El navegador nunca recibe `OLLAMA_BASE_URL` ni `OLLAMA_API_KEY`.
 - Los archivos CSV/Excel se leen en el cliente; sólo el inventario normalizado se envía al backend al solicitar recetas.
-- El Compose completo separa la red pública de la red de IA y no publica Ollama ni Next.js directamente.
+- El Compose completo no publica Ollama y enlaza Next.js únicamente a `127.0.0.1` para que sólo Nginx pueda acceder.
 - Las conexiones remotas a Ollama requieren HTTPS y token, salvo hosts internos de confianza o una excepción explícita.
 - La imagen de la aplicación se ejecuta con un usuario sin privilegios.
 - Electron habilita aislamiento de contexto, desactiva Node.js en la vista, deniega permisos y abre los enlaces externos fuera de la aplicación.
@@ -559,9 +606,16 @@ Los hosts remotos deben usar `https://` y tener `OLLAMA_API_KEY`. Reserva `OLLAM
 
 Revisa la carga y los logs de Ollama, confirma que el servidor tiene memoria suficiente y comprueba el límite de ejecución del proveedor web. La API espera hasta 285 segundos la respuesta de Ollama.
 
-### Caddy no obtiene el certificado
+### Nginx no publica AI Chef o falla el certificado
 
-Verifica que `APP_ADDRESS` u `OLLAMA_DOMAIN` coincide con el DNS público y que los puertos `80` y `443` llegan al servidor. Consulta los detalles con `docker compose logs caddy`.
+Comprueba que el DNS de `aichef.tudominio.com` apunta al servidor, que la
+aplicación responde con `curl -I http://127.0.0.1:3100` y que Nginx acepta su
+configuración con `sudo nginx -t`. Consulta `/var/log/nginx/aichef.error.log` y
+repite `sudo certbot --nginx -d aichef.tudominio.com` si la emisión inicial falló.
+
+En el despliegue desacoplado de `deploy/ollama`, Caddy sigue siendo quien publica
+Ollama. En ese caso verifica `OLLAMA_DOMAIN` y utiliza `docker compose logs caddy`
+desde dicha carpeta.
 
 ### El instalador de escritorio muestra una advertencia
 

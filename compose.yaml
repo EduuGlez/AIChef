@@ -13,8 +13,8 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_TRUSTED_HOSTS: ollama
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
-    expose:
-      - "3000"
+    ports:
+      - "127.0.0.1:${APP_PORT:-3100}:3000"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
       interval: 30s
@@ -25,7 +25,6 @@ services:
       ollama-init:
         condition: service_completed_successfully
     networks:
-      - frontend
       - ai-backend
 
   ollama:
@@ -57,30 +56,8 @@ services:
     networks:
       - ai-backend
 
-  caddy:
-    image: ${CADDY_IMAGE:-caddy:2-alpine}
-    restart: unless-stopped
-    environment:
-      APP_ADDRESS: ${APP_ADDRESS:?Define APP_ADDRESS in .env}
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./deploy/docker/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on:
-      app:
-        condition: service_healthy
-    networks:
-      - frontend
-
 networks:
-  frontend:
   ai-backend:
 
 volumes:
   ollama-data:
-  caddy-data:
-  caddy-config:

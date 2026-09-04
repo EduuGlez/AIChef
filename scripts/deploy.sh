@@ -7,11 +7,11 @@ if [ "$(git branch --show-current)" != "main" ]; then
 fi
 
 if [ ! -f .env ]; then
-  echo "Error: falta .env. Cópialo desde .env.example y configura APP_ADDRESS." >&2
+  echo "Error: falta .env. Cópialo desde .env.example antes de desplegar." >&2
   exit 1
 fi
 
 git pull --ff-only origin main
-docker compose pull ollama ollama-init caddy
+docker compose pull ollama ollama-init
 docker compose up -d --build --remove-orphans
 docker compose ps

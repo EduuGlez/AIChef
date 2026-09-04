@@ -5,18 +5,21 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 
 test("keeps Ollama private and initializes the configured model", async () => {
-  const [compose, caddyfile] = await Promise.all([
+  const [compose, nginxConfig] = await Promise.all([
     readFile(new URL("compose.yaml", root), "utf8"),
-    readFile(new URL("deploy/docker/Caddyfile", root), "utf8"),
+    readFile(new URL("deploy/nginx/aichef.conf", root), "utf8"),
   ]);
 
   assert.match(compose, /OLLAMA_BASE_URL: http:\/\/ollama:11434/);
   assert.match(compose, /OLLAMA_TRUSTED_HOSTS: ollama/);
   assert.match(compose, /ollama pull "\$\$\{OLLAMA_MODEL\}"/);
   assert.doesNotMatch(compose, /11434:11434/);
-  assert.doesNotMatch(compose, /3000:3000/);
-  assert.match(caddyfile, /reverse_proxy app:3000/);
-  assert.doesNotMatch(caddyfile, /ollama:11434/);
+  assert.match(compose, /127\.0\.0\.1:\$\{APP_PORT:-3100\}:3000/);
+  assert.doesNotMatch(compose, /caddy:/);
+  assert.match(nginxConfig, /server_name aichef\.tudominio\.com/);
+  assert.match(nginxConfig, /proxy_pass http:\/\/127\.0\.0\.1:3100/);
+  assert.match(nginxConfig, /proxy_read_timeout 300s/);
+  assert.doesNotMatch(nginxConfig, /ollama:11434/);
 });
 
 test("builds a non-root standalone Next.js image", async () => {
