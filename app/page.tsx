@@ -312,14 +312,14 @@ export default function Home() {
           className={`connection ${connection}`}
           type="button"
           onClick={() => void checkConnection()}
-          aria-label="Comprobar conexión con Ollama"
+          aria-label="Comprobar conexión con OpenAI"
         >
           <span className="connection-dot" />
           {connection === "online"
-            ? "Ollama conectado"
+            ? "OpenAI conectado"
             : connection === "checking"
-              ? "Comprobando Ollama"
-              : "Ollama sin conexión"}
+              ? "Comprobando OpenAI"
+              : "OpenAI sin conexión"}
         </button>
       </header>
 
@@ -388,7 +388,7 @@ export default function Home() {
                   <strong>{isParsingFile ? "Leyendo el archivo…" : "Selecciona un CSV o Excel"}</strong>
                   <small>Columnas recomendadas: ingrediente, cantidad y unidad</small>
                 </label>
-                <p className="privacy-hint">El archivo se lee en este navegador y no se envía a ningún servicio externo.</p>
+                <p className="privacy-hint">El archivo se lee en este navegador; al generar, sólo se envía a OpenAI el inventario revisado.</p>
                 {fileError && <div className="notice error" role="alert">{fileError}</div>}
 
                 {uploadedIngredients.length > 0 && (
@@ -501,8 +501,8 @@ export default function Home() {
 
             {connection === "offline" && (
               <div className="notice warning" role="status">
-                <b>Ollama no está disponible.</b>
-                <span>Inícialo y después pulsa el indicador de conexión.</span>
+                <b>OpenAI no está disponible.</b>
+                <span>Comprueba la clave y el saldo de la API y vuelve a pulsar el indicador.</span>
               </div>
             )}
             {error && <div className="notice error" role="alert">{error}</div>}

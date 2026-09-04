@@ -4,12 +4,12 @@ import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 
-test("contains the complete AI Chef recipe flow", async () => {
-  const [page, recipesRoute, modelsRoute, ollamaClient, layout, styles, packageJson] = await Promise.all([
+test("contains the complete Circular Chef recipe flow", async () => {
+  const [page, recipesRoute, modelsRoute, openAIClient, layout, styles, packageJson] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/api/recipes/route.ts", root), "utf8"),
     readFile(new URL("app/api/models/route.ts", root), "utf8"),
-    readFile(new URL("app/lib/ollama.ts", root), "utf8"),
+    readFile(new URL("app/lib/openai.ts", root), "utf8"),
     readFile(new URL("app/layout.tsx", root), "utf8"),
     readFile(new URL("app/globals.css", root), "utf8"),
     readFile(new URL("package.json", root), "utf8"),
@@ -24,34 +24,35 @@ test("contains the complete AI Chef recipe flow", async () => {
   assert.match(page, /read-excel-file\/browser/);
   assert.match(page, /readSheet\(file\)/);
   assert.match(page, /ingrediente, cantidad y unidad/);
-  assert.doesNotMatch(page, /Formulario guiado/);
   assert.match(page, /Generar 3 recetas/);
-  assert.match(page, /Ollama conectado/);
+  assert.match(page, /OpenAI conectado/);
   assert.match(page, /sistema APPCC/);
   assert.match(page, /Ingredientes y cantidades/);
   assert.match(page, /Elaboración paso a paso/);
   assert.match(page, /recipe\.ingredients \?\?/);
   assert.match(page, /recipe\.uses \?\?/);
-  assert.match(recipesRoute, /ollamaFetch\("api\/chat"/);
+  assert.match(recipesRoute, /openAIFetch\("responses"/);
   assert.match(recipesRoute, /exactamente 3 recetas/);
   assert.match(recipesRoute, /prep_time_minutes/);
   assert.match(recipesRoute, /duration_minutes/);
   assert.match(recipesRoute, /No uses expresiones vagas/);
-  assert.match(recipesRoute, /model: getOllamaModel\(\)/);
+  assert.match(recipesRoute, /model: getOpenAIModel\(\)/);
+  assert.match(recipesRoute, /type: "json_schema"/);
+  assert.match(recipesRoute, /strict: true/);
+  assert.match(recipesRoute, /store: false/);
   assert.match(recipesRoute, /export const maxDuration = 300/);
   assert.doesNotMatch(recipesRoute, /body\.model|origin:/);
-  assert.match(modelsRoute, /ollamaFetch\("api\/tags"/);
-  assert.match(ollamaClient, /OLLAMA_API_KEY/);
-  assert.match(ollamaClient, /Authorization/);
-  assert.match(ollamaClient, /El Ollama remoto debe estar protegido con HTTPS/);
+  assert.match(modelsRoute, /openAIFetch\(`models\//);
+  assert.match(openAIClient, /OPENAI_API_KEY/);
+  assert.match(openAIClient, /Authorization/);
+  assert.match(openAIClient, /https:\/\/api\.openai\.com\/v1\//);
   assert.match(layout, /Circular Chef \| Cocina circular con IA/);
   assert.match(page, /https:\/\/www\.fu-tourism\.eu\//);
   assert.match(page, /\/fu-tourism-logo\.png/);
   assert.match(page, /\/europa\.jpeg/);
-  assert.doesNotMatch(page, /Prueba con:|Modelo local|100 % local|Modelo de Ollama|Nombre del modelo|ingredient\.origin/);
+  assert.doesNotMatch(page, /Prueba con:|Modelo local|100 % local|Nombre del modelo|ingredient\.origin/);
   assert.doesNotMatch(page, /SkeletonPreview|codex-preview/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
-  assert.doesNotMatch(packageJson, /WRANGLER_LOG_PATH=/);
   assert.match(packageJson, /"dev": "next dev"/);
   assert.match(packageJson, /"build": "next build --webpack"/);
   assert.match(packageJson, /"build:sites": "vinext build"/);

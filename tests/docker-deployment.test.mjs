@@ -4,22 +4,23 @@ import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 
-test("keeps Ollama private and initializes the configured model", async () => {
-  const [compose, nginxConfig] = await Promise.all([
+test("runs only the application container and keeps it behind Nginx", async () => {
+  const [compose, nginxConfig, exampleEnvironment] = await Promise.all([
     readFile(new URL("compose.yaml", root), "utf8"),
     readFile(new URL("deploy/nginx/aichef.conf", root), "utf8"),
+    readFile(new URL(".env.example", root), "utf8"),
   ]);
 
-  assert.match(compose, /OLLAMA_BASE_URL: http:\/\/ollama:11434/);
-  assert.match(compose, /OLLAMA_TRUSTED_HOSTS: ollama/);
-  assert.match(compose, /ollama pull "\$\$\{OLLAMA_MODEL\}"/);
-  assert.doesNotMatch(compose, /11434:11434/);
+  assert.match(compose, /OPENAI_API_KEY/);
+  assert.match(compose, /OPENAI_MODEL/);
   assert.match(compose, /127\.0\.0\.1:\$\{APP_PORT:-3100\}:3000/);
-  assert.doesNotMatch(compose, /caddy:/);
-  assert.match(nginxConfig, /server_name aichef\.tudominio\.com/);
+  assert.doesNotMatch(compose, /11434|caddy:/);
+  assert.match(exampleEnvironment, /OPENAI_API_KEY=/);
+  assert.match(exampleEnvironment, /OPENAI_MODEL=gpt-5\.6-terra/);
+  assert.match(nginxConfig, /server_name circularchef\.effichef\.es/);
   assert.match(nginxConfig, /proxy_pass http:\/\/127\.0\.0\.1:3100/);
   assert.match(nginxConfig, /proxy_read_timeout 300s/);
-  assert.doesNotMatch(nginxConfig, /ollama:11434/);
+  assert.doesNotMatch(nginxConfig, /11434/);
 });
 
 test("builds a non-root standalone Next.js image", async () => {
@@ -36,10 +37,7 @@ test("builds a non-root standalone Next.js image", async () => {
 
 test("provides an executable production deployment script", async () => {
   const scriptUrl = new URL("scripts/deploy.sh", root);
-  const [script, metadata] = await Promise.all([
-    readFile(scriptUrl, "utf8"),
-    stat(scriptUrl),
-  ]);
+  const [script, metadata] = await Promise.all([readFile(scriptUrl, "utf8"), stat(scriptUrl)]);
 
   assert.match(script, /git pull --ff-only origin main/);
   assert.match(script, /docker compose up -d --build --remove-orphans/);

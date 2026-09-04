@@ -1,18 +1,16 @@
-const { app, BrowserWindow, dialog, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require("electron");
 const { spawn } = require("node:child_process");
-const { appendFile, access, mkdir } = require("node:fs/promises");
+const { appendFile, access, mkdir, readFile, writeFile } = require("node:fs/promises");
 const net = require("node:net");
 const path = require("node:path");
 
-const MODEL = "llama3.2:3b";
-const DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434";
-const OLLAMA_URL = process.env.OLLAMA_BASE_URL || DEFAULT_OLLAMA_URL;
+const DEFAULT_OPENAI_MODEL = "gpt-5.6-terra";
 
 let setupWindow;
 let mainWindow;
-let ollamaProcess;
 let webProcess;
-let quitting = false;
+let pendingApiKey;
+let setupState = { text: "Preparando la aplicación…", percent: 4 };
 
 function resourcePath(...parts) {
   const root = app.isPackaged ? process.resourcesPath : path.join(__dirname, "..");
@@ -25,14 +23,8 @@ function webAppPath() {
     : path.join(__dirname, "..", "dist", "standalone");
 }
 
-function ollamaDirectory() {
-  return app.isPackaged
-    ? resourcePath("ollama")
-    : path.join(__dirname, "..", ".desktop-vendor", "ollama");
-}
-
-function ollamaExecutable() {
-  return path.join(ollamaDirectory(), process.platform === "win32" ? "ollama.exe" : "ollama");
+function credentialPath() {
+  return path.join(app.getPath("userData"), "openai-api-key.bin");
 }
 
 async function log(message) {
@@ -56,108 +48,38 @@ async function fetchWithTimeout(url, options = {}, timeout = 5000) {
   return fetch(url, { ...options, signal: AbortSignal.timeout(timeout) });
 }
 
-async function getInstalledModels() {
-  const response = await fetchWithTimeout(`${OLLAMA_URL}/api/tags`, {}, 4000);
-  if (!response.ok) throw new Error(`Ollama respondió con HTTP ${response.status}`);
-  const data = await response.json();
-  return Array.isArray(data.models) ? data.models : [];
-}
+async function loadApiKey() {
+  const environmentKey = process.env.OPENAI_API_KEY?.trim();
+  if (environmentKey) return environmentKey;
+  if (!safeStorage.isEncryptionAvailable()) return "";
 
-async function waitForOllama(timeout = 60000) {
-  const deadline = Date.now() + timeout;
-  let lastError;
-
-  while (Date.now() < deadline) {
-    try {
-      return await getInstalledModels();
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 800));
-    }
-  }
-
-  throw new Error(`Ollama no pudo iniciarse: ${lastError?.message || "tiempo de espera agotado"}`);
-}
-
-async function ensureOllama() {
   try {
-    return await getInstalledModels();
+    const encrypted = await readFile(credentialPath());
+    return safeStorage.decryptString(encrypted).trim();
   } catch {
-    if (OLLAMA_URL !== DEFAULT_OLLAMA_URL) {
-      throw new Error(`No se puede conectar con Ollama en ${OLLAMA_URL}.`);
-    }
+    return "";
   }
-
-  const executable = ollamaExecutable();
-  await access(executable);
-  updateSetup("Iniciando el motor de inteligencia artificial…", 12);
-
-  ollamaProcess = spawn(executable, ["serve"], {
-    cwd: ollamaDirectory(),
-    env: {
-      ...process.env,
-      OLLAMA_HOST: "127.0.0.1:11434",
-      OLLAMA_NO_CLOUD: "1",
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-    windowsHide: true,
-  });
-  captureProcessOutput(ollamaProcess, "ollama");
-  return waitForOllama();
 }
 
-function hasRequiredModel(models) {
-  return models.some((entry) => entry?.name === MODEL || entry?.model === MODEL);
+async function saveApiKey(apiKey) {
+  if (!safeStorage.isEncryptionAvailable()) return false;
+  await mkdir(app.getPath("userData"), { recursive: true });
+  await writeFile(credentialPath(), safeStorage.encryptString(apiKey), { mode: 0o600 });
+  return true;
 }
 
-function pullProgressMessage(event) {
-  if (event.total > 0 && event.completed >= 0) {
-    const percent = Math.min(100, Math.round((event.completed / event.total) * 100));
-    return {
-      text: `Descargando el modelo de cocina… ${percent} %`,
-      percent: 18 + Math.round(percent * 0.62),
-    };
-  }
-  return { text: event.status || "Preparando el modelo de cocina…", percent: 18 };
-}
-
-async function ensureModel(models) {
-  if (hasRequiredModel(models)) return;
-
-  updateSetup("Descargando el modelo de cocina por primera vez…", 18);
+async function validateApiKey(apiKey) {
+  const model = process.env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL;
   const response = await fetchWithTimeout(
-    `${OLLAMA_URL}/api/pull`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: MODEL, stream: true }),
-    },
-    30 * 60 * 1000,
+    `https://api.openai.com/v1/models/${encodeURIComponent(model)}`,
+    { headers: { Accept: "application/json", Authorization: `Bearer ${apiKey}` } },
+    15_000,
   );
 
-  if (!response.ok || !response.body) {
-    throw new Error(`No se pudo descargar ${MODEL} (HTTP ${response.status}).`);
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { value, done } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const event = JSON.parse(line);
-      if (event.error) throw new Error(event.error);
-      const progress = pullProgressMessage(event);
-      updateSetup(progress.text, progress.percent);
-    }
-
-    if (done) break;
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("La clave API no es válida.");
+    if (response.status === 403) throw new Error("La clave no tiene acceso al modelo configurado.");
+    throw new Error(`OpenAI respondió con HTTP ${response.status}.`);
   }
 }
 
@@ -174,7 +96,7 @@ function findFreePort() {
   });
 }
 
-async function waitForWebApp(url, timeout = 60000) {
+async function waitForWebApp(url, timeout = 60_000) {
   const deadline = Date.now() + timeout;
   let lastError;
 
@@ -192,7 +114,7 @@ async function waitForWebApp(url, timeout = 60000) {
   throw new Error(`La interfaz no pudo iniciarse: ${lastError?.message || "tiempo agotado"}`);
 }
 
-async function startWebApp() {
+async function startWebApp(apiKey) {
   if (webProcess) return webProcess.url;
 
   const appDirectory = webAppPath();
@@ -201,7 +123,7 @@ async function startWebApp() {
   const port = await findFreePort();
   const url = `http://127.0.0.1:${port}`;
 
-  updateSetup("Iniciando AI Chef…", 88);
+  updateSetup("Iniciando Circular Chef…", 75);
   webProcess = spawn(process.execPath, [entry], {
     cwd: appDirectory,
     env: {
@@ -209,7 +131,8 @@ async function startWebApp() {
       ELECTRON_RUN_AS_NODE: "1",
       HOST: "127.0.0.1",
       PORT: String(port),
-      OLLAMA_BASE_URL: OLLAMA_URL,
+      OPENAI_API_KEY: apiKey,
+      OPENAI_MODEL: process.env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL,
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
@@ -220,10 +143,10 @@ async function startWebApp() {
   return url;
 }
 
-function createSetupWindow() {
+async function createSetupWindow() {
   setupWindow = new BrowserWindow({
-    width: 540,
-    height: 360,
+    width: 560,
+    height: 510,
     resizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -231,30 +154,35 @@ function createSetupWindow() {
     backgroundColor: "#f4f8fb",
     title: "Preparando Circular Chef",
     webPreferences: {
+      preload: path.join(__dirname, "setup-preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
   });
   setupWindow.removeMenu();
-  setupWindow.loadFile(path.join(__dirname, "setup.html"));
-  setupWindow.once("ready-to-show", () => setupWindow?.show());
+  await setupWindow.loadFile(path.join(__dirname, "setup.html"));
+  setupWindow.webContents.send("setup:status", setupState);
+  setupWindow.show();
 }
 
 function updateSetup(text, percent) {
+  setupState = { text, percent: Math.max(0, Math.min(100, Number(percent) || 0)) };
   if (!setupWindow || setupWindow.isDestroyed()) return;
-  const safeText = JSON.stringify(text);
-  const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
-  void setupWindow.webContents.executeJavaScript(
-    `document.getElementById("status").textContent = ${safeText};` +
-      `document.getElementById("progress").style.width = "${safePercent}%";`,
-  );
+  setupWindow.webContents.send("setup:status", setupState);
+}
+
+function requestApiKey(message = "Introduce tu clave API de OpenAI para continuar.") {
+  updateSetup("Configuración de OpenAI necesaria", 20);
+  setupWindow?.webContents.send("setup:request-api-key", { message });
+  return new Promise((resolve) => {
+    pendingApiKey = { resolve };
+  });
 }
 
 function isLocalAppUrl(candidate, origin) {
   try {
-    const url = new URL(candidate);
-    return url.origin === origin;
+    return new URL(candidate).origin === origin;
   } catch {
     return false;
   }
@@ -270,11 +198,7 @@ async function createMainWindow(url) {
     show: false,
     backgroundColor: "#f4f8fb",
     title: "Circular Chef",
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   mainWindow.removeMenu();
   mainWindow.webContents.setWindowOpenHandler(({ url: target }) => {
@@ -294,10 +218,20 @@ async function createMainWindow(url) {
 }
 
 async function bootstrap() {
-  updateSetup("Comprobando Ollama…", 5);
-  const models = await ensureOllama();
-  await ensureModel(models);
-  const url = await startWebApp();
+  updateSetup("Comprobando la configuración de OpenAI…", 8);
+  let apiKey = await loadApiKey();
+
+  if (apiKey) {
+    try {
+      await validateApiKey(apiKey);
+    } catch (error) {
+      await log(`[openai] ${error.message}`);
+      apiKey = "";
+    }
+  }
+
+  if (!apiKey) apiKey = await requestApiKey();
+  const url = await startWebApp(apiKey);
   updateSetup("Todo listo", 100);
   await createMainWindow(url);
 }
@@ -312,7 +246,7 @@ async function startWithRecovery() {
       type: "error",
       title: "Circular Chef no pudo iniciarse",
       message: "No se pudo preparar la aplicación.",
-      detail: `${error.message}\n\nComprueba la conexión a Internet y el espacio disponible.`,
+      detail: `${error.message}\n\nComprueba la conexión a Internet y la configuración de OpenAI.`,
       buttons: ["Reintentar", "Cerrar"],
       defaultId: 0,
       cancelId: 1,
@@ -326,6 +260,23 @@ function stopChild(child) {
   if (!child || child.killed) return;
   child.kill("SIGTERM");
 }
+
+ipcMain.handle("openai-key:submit", async (_event, submittedKey) => {
+  const apiKey = typeof submittedKey === "string" ? submittedKey.trim() : "";
+  if (apiKey.length < 20) return { ok: false, error: "Introduce una clave API válida." };
+
+  try {
+    updateSetup("Validando la clave con OpenAI…", 35);
+    await validateApiKey(apiKey);
+    const persisted = await saveApiKey(apiKey);
+    pendingApiKey?.resolve(apiKey);
+    pendingApiKey = undefined;
+    return { ok: true, warning: persisted ? "" : "La clave se usará solo durante esta sesión." };
+  } catch (error) {
+    updateSetup("Configuración de OpenAI necesaria", 20);
+    return { ok: false, error: error.message || "No se pudo validar la clave." };
+  }
+});
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -345,7 +296,7 @@ if (!gotLock) {
     app.on("web-contents-created", (_event, contents) => {
       contents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
     });
-    createSetupWindow();
+    await createSetupWindow();
     await startWithRecovery();
   });
 
@@ -358,9 +309,6 @@ if (!gotLock) {
   });
 
   app.on("before-quit", () => {
-    if (quitting) return;
-    quitting = true;
     stopChild(webProcess);
-    stopChild(ollamaProcess);
   });
 }

@@ -12,6 +12,5 @@ if [ ! -f .env ]; then
 fi
 
 git pull --ff-only origin main
-docker compose pull ollama ollama-init
 docker compose up -d --build --remove-orphans
 docker compose ps

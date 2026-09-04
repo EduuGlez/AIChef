@@ -2,7 +2,7 @@
   "name": "circular-chef",
   "productName": "Circular Chef",
   "version": "0.1.0",
-  "description": "Recetas profesionales de reaprovechamiento con inteligencia artificial local.",
+  "description": "Recetas profesionales de reaprovechamiento con inteligencia artificial.",
   "author": "Circular Chef",
   "private": true,
   "main": "desktop/main.cjs",
@@ -15,12 +15,12 @@
     "start": "next start",
     "dev:sites": "vinext dev",
     "build:sites": "vinext build",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/ollama-client.test.mjs tests/docker-deployment.test.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/openai-client.test.mjs tests/docker-deployment.test.mjs",
     "test:desktop": "node --test tests/desktop-packaging.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "desktop:prepare": "npm run build:sites && node scripts/prepare-ollama.mjs",
-    "desktop:prepare:win": "npm run build:sites && node scripts/prepare-ollama.mjs --platform win32",
+    "desktop:prepare": "npm run build:sites",
+    "desktop:prepare:win": "npm run build:sites",
     "desktop:dev": "npm run desktop:prepare && electron .",
     "desktop:package": "npm run desktop:prepare && electron-builder --dir",
     "desktop:dist": "npm run desktop:prepare && electron-builder",
@@ -87,10 +87,6 @@
         "filter": [
           "**/*"
         ]
-      },
-      {
-        "from": "desktop/THIRD_PARTY_NOTICES.md",
-        "to": "THIRD_PARTY_NOTICES.md"
       }
     ],
     "artifactName": "Circular-Chef-${version}-${os}-${arch}.${ext}",
@@ -100,32 +96,14 @@
         "zip"
       ],
       "category": "public.app-category.productivity",
-      "icon": "desktop/assets/icon.png",
-      "extraResources": [
-        {
-          "from": ".desktop-vendor/ollama-darwin",
-          "to": "ollama",
-          "filter": [
-            "**/*"
-          ]
-        }
-      ]
+      "icon": "desktop/assets/icon.png"
     },
     "dmg": {
       "title": "Circular Chef ${version}"
     },
     "win": {
       "target": "nsis",
-      "icon": "desktop/assets/icon.png",
-      "extraResources": [
-        {
-          "from": ".desktop-vendor/ollama-win32-x64",
-          "to": "ollama",
-          "filter": [
-            "**/*"
-          ]
-        }
-      ]
+      "icon": "desktop/assets/icon.png"
     },
     "nsis": {
       "oneClick": false,
@@ -136,16 +114,7 @@
     "linux": {
       "target": "AppImage",
       "category": "Utility",
-      "icon": "desktop/assets/icon.png",
-      "extraResources": [
-        {
-          "from": ".desktop-vendor/ollama-linux-x64",
-          "to": "ollama",
-          "filter": [
-            "**/*"
-          ]
-        }
-      ]
+      "icon": "desktop/assets/icon.png"
     }
   }
 }

@@ -2,59 +2,28 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
-    />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Preparando Circular Chef</title>
     <style>
-      :root {
-        color-scheme: light;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: #123047;
-        background: #f4f8fb;
-      }
+      :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #123047; background: #f4f8fb; }
       * { box-sizing: border-box; }
-      body {
-        min-height: 100vh;
-        margin: 0;
-        display: grid;
-        place-items: center;
-        padding: 38px;
-        text-align: center;
-      }
-      main { width: min(100%, 430px); }
-      .mark {
-        width: 70px;
-        height: 70px;
-        margin: 0 auto 22px;
-        display: grid;
-        place-items: center;
-        border-radius: 21px;
-        color: white;
-        font-size: 35px;
-        font-weight: 800;
-        background: linear-gradient(145deg, #0b5394, #00b6bd);
-        box-shadow: 0 16px 36px rgba(11, 83, 148, 0.2);
-      }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 36px; text-align: center; }
+      main { width: min(100%, 450px); }
+      .mark { width: 70px; height: 70px; margin: 0 auto 20px; display: grid; place-items: center; border-radius: 21px; color: white; font-size: 35px; font-weight: 800; background: linear-gradient(145deg, #0b5394, #00b6bd); box-shadow: 0 16px 36px rgba(11, 83, 148, 0.2); }
       h1 { margin: 0; font-size: 25px; letter-spacing: -0.02em; }
-      .tagline { margin: 7px 0 28px; color: #547083; font-size: 14px; }
-      .track {
-        height: 10px;
-        overflow: hidden;
-        border-radius: 999px;
-        background: #dce8ef;
-      }
-      #progress {
-        width: 4%;
-        height: 100%;
-        border-radius: inherit;
-        background: linear-gradient(90deg, #0b5394, #00b6bd, #6bac00);
-        transition: width 280ms ease;
-      }
-      #status { min-height: 23px; margin: 17px 0 0; font-weight: 650; }
-      .note { margin: 9px 0 0; color: #688092; font-size: 12px; line-height: 1.45; }
+      .tagline { margin: 7px 0 24px; color: #547083; font-size: 14px; }
+      .track { height: 10px; overflow: hidden; border-radius: 999px; background: #dce8ef; }
+      #progress { width: 4%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #0b5394, #00b6bd, #6bac00); transition: width 280ms ease; }
+      #status { min-height: 23px; margin: 16px 0 0; font-weight: 650; }
+      .note { margin: 8px 0 0; color: #688092; font-size: 12px; line-height: 1.45; }
+      form { display: none; margin-top: 19px; text-align: left; }
+      form.visible { display: block; }
+      label { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 700; }
+      input { width: 100%; height: 42px; padding: 0 12px; border: 1px solid #afc6d4; border-radius: 9px; background: white; color: #123047; font: inherit; }
+      button { width: 100%; height: 42px; margin-top: 10px; border: 0; border-radius: 9px; color: white; background: #0b5394; font: inherit; font-weight: 700; cursor: pointer; }
+      button:disabled { cursor: wait; opacity: 0.65; }
+      #setup-error { min-height: 18px; margin: 8px 0 0; color: #a52a2a; font-size: 12px; text-align: center; }
     </style>
   </head>
   <body>
@@ -62,14 +31,18 @@
       <div class="mark" aria-hidden="true">C</div>
       <h1>Circular Chef</h1>
       <p class="tagline">Aprovecha más. Desperdicia menos.</p>
-      <div class="track" role="progressbar" aria-label="Preparación de la aplicación">
+      <div class="track" role="progressbar" aria-label="Preparación de la aplicación" aria-valuemin="0" aria-valuemax="100">
         <div id="progress"></div>
       </div>
       <p id="status" aria-live="polite">Preparando la aplicación…</p>
-      <p class="note">
-        En el primer inicio se descargará el modelo local. Puede tardar varios minutos y requiere
-        conexión a Internet; después, las recetas se generan en este equipo.
-      </p>
+      <p id="setup-message" class="note">Circular Chef utiliza la API de OpenAI y necesita conexión a Internet.</p>
+      <form id="credential-form">
+        <label for="api-key">Clave API de OpenAI</label>
+        <input id="api-key" name="api-key" type="password" autocomplete="off" spellcheck="false" required />
+        <button id="submit-key" type="submit">Guardar y continuar</button>
+        <p id="setup-error" role="alert"></p>
+        <p class="note">La clave se cifra con el almacén seguro del sistema cuando está disponible y nunca se muestra en la interfaz web.</p>
+      </form>
     </main>
   </body>
 </html>

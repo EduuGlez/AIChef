@@ -1,28 +1,29 @@
-import { getOllamaModel, ollamaFetch } from "../../lib/ollama";
+import {
+  getOpenAIModel,
+  OpenAIConfigurationError,
+  openAIFetch,
+} from "../../lib/openai";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
 
 export async function GET() {
   try {
-    const response = await ollamaFetch("api/tags", {}, 7_000);
-    if (!response.ok) throw new Error("Ollama no respondió correctamente");
-
-    const data = (await response.json()) as { models?: Array<{ name: string }> };
-    const model = getOllamaModel();
-    const available = (data.models || []).some((item) => item.name === model);
-
-    if (!available) {
+    const model = getOpenAIModel();
+    const response = await openAIFetch(`models/${encodeURIComponent(model)}`, {}, 10_000);
+    if (!response.ok) {
+      console.error("OpenAI rechazó la comprobación del modelo", response.status);
       return Response.json(
-        { error: `El modelo ${model} no está instalado.`, online: false },
+        { error: "No se pudo validar la configuración de OpenAI.", online: false },
         { status: 503 },
       );
     }
 
     return Response.json({ online: true });
-  } catch {
+  } catch (error) {
+    if (error instanceof OpenAIConfigurationError) console.error(error.message);
     return Response.json(
-      { error: "No se pudo conectar con el servicio de IA", online: false },
+      { error: "No se pudo conectar con OpenAI.", online: false },
       { status: 503 },
     );
   }

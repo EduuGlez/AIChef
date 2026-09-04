@@ -1,8 +1,8 @@
 import {
-  getOllamaModel,
-  OllamaConfigurationError,
-  ollamaFetch,
-} from "../../lib/ollama";
+  getOpenAIModel,
+  OpenAIConfigurationError,
+  openAIFetch,
+} from "../../lib/openai";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -13,6 +13,7 @@ const MAX_STYLE_LENGTH = 200;
 
 const recipeSchema = {
   type: "object",
+  additionalProperties: false,
   properties: {
     introduction: { type: "string" },
     recipes: {
@@ -21,6 +22,7 @@ const recipeSchema = {
       maxItems: 3,
       items: {
         type: "object",
+        additionalProperties: false,
         properties: {
           title: { type: "string" },
           summary: { type: "string" },
@@ -35,6 +37,7 @@ const recipeSchema = {
             minItems: 2,
             items: {
               type: "object",
+              additionalProperties: false,
               properties: {
                 name: { type: "string" },
                 amount: { type: "number" },
@@ -53,6 +56,7 @@ const recipeSchema = {
             maxItems: 10,
             items: {
               type: "object",
+              additionalProperties: false,
               properties: {
                 number: { type: "integer" },
                 instruction: { type: "string" },
@@ -81,6 +85,30 @@ const recipeSchema = {
 function normalizeContent(content: string) {
   const cleaned = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   return JSON.parse(cleaned);
+}
+
+type OpenAIResponse = {
+  status?: string;
+  error?: { code?: string; message?: string };
+  incomplete_details?: { reason?: string };
+  output_text?: string;
+  output?: Array<{
+    type?: string;
+    content?: Array<{ type?: string; text?: string }>;
+  }>;
+};
+
+function extractOutputText(data: OpenAIResponse) {
+  if (typeof data.output_text === "string" && data.output_text.trim()) {
+    return data.output_text;
+  }
+
+  return (data.output || [])
+    .filter((item) => item.type === "message")
+    .flatMap((item) => item.content || [])
+    .filter((content) => content.type === "output_text" && typeof content.text === "string")
+    .map((content) => content.text)
+    .join("");
 }
 
 function boundedInteger(value: unknown, fallback: number, minimum: number, maximum: number) {
@@ -193,62 +221,78 @@ SALIDA
 - Devuelve exclusivamente un objeto JSON válido que cumpla exactamente el esquema proporcionado.
 - No añadas Markdown, comentarios, encabezados ni texto fuera del JSON.`;
 
-    const response = await ollamaFetch("api/chat", {
+    const response = await openAIFetch("responses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: getOllamaModel(),
-        stream: false,
-        format: recipeSchema,
-        options: {
-          temperature: 0.2,
-          num_predict: 3600,
-          num_ctx: 8192,
-          repeat_penalty: 1.08,
+        model: getOpenAIModel(),
+        store: false,
+        max_output_tokens: 6_000,
+        reasoning: {
+          effort: "low",
         },
-        messages: [
-          {
-            role: "system",
-            content: `Eres un chef ejecutivo especializado en cocina hotelera, estandarización
+        instructions: `Eres un chef ejecutivo especializado en cocina hotelera, estandarización
 de recetas, escandallos, reaprovechamiento y seguridad alimentaria. Redactas recetas precisas,
 coherentes y reproducibles por otro equipo de cocina. Compruebas mentalmente cantidades,
 raciones, tiempos, temperaturas, alérgenos y correspondencia entre ingredientes y pasos antes
 de responder. Priorizas exactitud y viabilidad sobre creatividad. Respondes únicamente con JSON
 válido que cumple el esquema solicitado.`,
+        input: prompt,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "circular_chef_recipes",
+            strict: true,
+            schema: recipeSchema,
           },
-          { role: "user", content: prompt },
-        ],
+        },
       }),
     }, 285_000);
 
     const responseText = await response.text();
-    let data: {
-      message?: { content?: string };
-      error?: string;
-    } = {};
+    let data: OpenAIResponse = {};
 
     try {
-      data = JSON.parse(responseText) as typeof data;
+      data = JSON.parse(responseText) as OpenAIResponse;
     } catch {
-      if (response.ok) throw new SyntaxError("Ollama devolvió una respuesta no JSON.");
+      if (response.ok) throw new SyntaxError("OpenAI devolvió una respuesta no JSON.");
     }
 
     if (!response.ok) {
-      console.error("Ollama rechazó la generación", response.status, data.error || "sin detalle");
+      console.error(
+        "OpenAI rechazó la generación",
+        response.status,
+        data.error?.code || "sin código",
+      );
+      if (response.status === 429) {
+        return Response.json(
+          { error: "Se ha alcanzado temporalmente el límite de uso de la API. Inténtalo más tarde." },
+          { status: 429 },
+        );
+      }
       return Response.json(
         { error: "El servicio de IA no pudo procesar la solicitud." },
-        { status: response.status >= 400 && response.status < 500 ? 502 : 503 },
+        { status: response.status >= 500 ? 503 : 502 },
       );
     }
 
-    if (!data.message?.content) {
-      return Response.json({ error: "Ollama devolvió una respuesta vacía." }, { status: 502 });
+    if (data.status === "incomplete") {
+      console.error("OpenAI devolvió una respuesta incompleta", data.incomplete_details?.reason);
+      return Response.json(
+        { error: "La respuesta quedó incompleta. Reduce la entrada e inténtalo de nuevo." },
+        { status: 502 },
+      );
     }
 
-    const recipes = normalizeContent(data.message.content);
+    const outputText = extractOutputText(data);
+    if (!outputText) {
+      return Response.json({ error: "OpenAI devolvió una respuesta vacía." }, { status: 502 });
+    }
+
+    const recipes = normalizeContent(outputText);
     return Response.json(recipes);
   } catch (error) {
-    if (error instanceof OllamaConfigurationError) {
+    if (error instanceof OpenAIConfigurationError) {
       console.error(error.message);
       return Response.json(
         { error: "El servicio de IA no está configurado correctamente." },
